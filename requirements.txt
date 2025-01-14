@@ -1,0 +1,4 @@
+# cli
+click
+# cli.shopify.theme_updater
+pyyaml
