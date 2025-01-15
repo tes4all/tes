@@ -167,6 +167,11 @@ def _set_tes_config(config, store):
     config["shopify"]["store"] = store
     utils.write_config(config)
 
+    # commit and push
+    utils.cmd_exec(["git", "add", ".tes.yml"])
+    utils.cmd_exec(["git", "commit", "-m", "tes: update tes config"])
+    utils.cmd_exec(["git", "push"])
+
 
 def _branch_exists(branch_name):
     result = utils.cmd_exec(["git", "branch", "--list", branch_name])
