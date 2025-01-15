@@ -17,6 +17,13 @@ def theme(ctx):
 @click.pass_context
 @click.option("--store", required=True)
 def init(ctx, store):
+    """Initialize the tes config and create the theme branches."""
+    click.echo("Initializing...")
+    click.echo(f"Store: {store}")
+    click.echo(f"Working directory: {utils.WORK_FOLDER}")
+    click.echo("Pull updates...")
+    utils.cmd_exec(["git", "pull"])
+
     config = utils.get_config()
     if (
         not config.get("shopify")
@@ -58,8 +65,10 @@ def init(ctx, store):
         return
     click.echo("Found")
 
-    """
     branches = ["staging"]
+    branches.append(
+        _get_branch_name_theme(theme_info["theme_name"], theme_info["theme_version"])
+    )
 
     click.echo(f"\rCreating branches: {branches}")
     current_branch = _get_current_branch()
@@ -73,7 +82,6 @@ def init(ctx, store):
             click.echo(f"Done")
 
     click.echo("\rBranches created!")
-    """
 
     click.echo("\rShopify theme initialized!")
 
