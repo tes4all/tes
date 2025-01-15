@@ -92,6 +92,22 @@ def init(ctx, store):
     #    os.system(f"git push -u origin {branch}")
 
 
+def ignore_files(src, names):
+    prefix = "tmp_new_version"
+    if "config" in src:
+        return {"settings_data.json"}  # Exclude settings_data.json in config folder
+    if src in [
+        f"{prefix}/locales",
+        f"{prefix}/sections",
+        f"{prefix}/templates",
+        f"{prefix}/templates/customers",
+    ]:
+        return {
+            name for name in names if name.endswith(".json")
+        }  # Exclude all JSON files in templates folder
+    return set()
+
+
 @theme.command()
 @click.pass_context
 def update(ctx):
@@ -146,7 +162,7 @@ def update(ctx):
         "tmp_new_version",
         ".",
         dirs_exist_ok=True,
-        ignore=shutil.ignore_patterns("config/settings_data.json", "templates/*.json"),
+        ignore=ignore_files,
     )
     shutil.rmtree("tmp_new_version")
 
@@ -156,11 +172,11 @@ def update(ctx):
 
     # go back to staging branch
     utils.cmd_exec(["git", "checkout", branch_name_staging])
-    utils.cmd_exec(["git", "rebase", "--interactive", branch_name_temp, "--dry-run"])
+    subprocess.run(["git", "diff", "--stat", branch_name_staging, branch_name_temp])
 
     # click.echo("Merge new version into current branch...")
     # subprocess.run(["git", "rebase", "theme_updater_temp"])
-    click.echo("Shopify theme updated!")
+    click.echo("Shopify theme ready to merge!")
 
 
 def _get_branch_name_theme(theme_name, theme_version):
