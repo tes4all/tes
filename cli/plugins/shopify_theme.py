@@ -58,6 +58,7 @@ def init(ctx, store):
         return
     click.echo("Found")
 
+    """
     branches = ["staging"]
 
     click.echo(f"\rCreating branches: {branches}")
@@ -72,6 +73,7 @@ def init(ctx, store):
             click.echo(f"Done")
 
     click.echo("\rBranches created!")
+    """
 
     click.echo("\rShopify theme initialized!")
 
@@ -89,31 +91,35 @@ def update(ctx):
     config = utils.get_config()
     store = config["shopify"]["store"]
     theme_info = _get_theme_info()
+    branch_name_staging = "theme_updater_staging"
+    branch_name_temp = "theme_updater_temp"
 
-    click.echo("Switching to staging branch")
-    utils.cmd_exec(["git", "checkout", "staging"])
+    # delete temp branches
+    if _branch_exists(branch_name_staging):
+        utils.cmd_exec(["git", "branch", "-D", branch_name_staging])
+    if _branch_exists(branch_name_temp):
+        utils.cmd_exec(["git", "branch", "-D", branch_name_temp])
 
-    old_branch_name = _get_branch_name_theme(
+    # create staging branch from current branch
+    utils.cmd_exec(["git", "checkout", "-b", branch_name_staging])
+
+    # check if theme branch (old version) exists
+    branch_name_theme_version_old = _get_branch_name_theme(
         theme_info["theme_name"], theme_info["theme_version"]
     )
-    if not _branch_exists(old_branch_name):
-        click.echo(f"Branch {old_branch_name} does not exist.")
+    if not _branch_exists(branch_name_theme_version_old):
+        click.echo(f"Branch {branch_name_theme_version_old} does not exist.")
         return
 
     click.echo("\rBackup raw theme...", nl=False)
     new_theme_info = _backup_raw_theme(store)
-    click.echo("Done.")
+    click.echo("\rBackup done.")
 
     # checkout new branch, copy everything to a temp folder and switch back to main branch
-    new_branch_name = _get_branch_name_theme(
+    branch_name_theme_version_new = _get_branch_name_theme(
         new_theme_info["theme_name"], new_theme_info["theme_version"]
     )
-    utils.cmd_exec(["git", "checkout", new_branch_name])
-
-    # show config/settings_data.json first 100 lines
-    click.echo(f"config/settings_schema.json:")
-    with open("config/settings_schema.json") as f:
-        click.echo(f.read()[:100])
+    utils.cmd_exec(["git", "checkout", branch_name_theme_version_new])
 
     # copy everything to a temp folder
     shutil.copytree(
@@ -122,13 +128,10 @@ def update(ctx):
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns(".git"),
     )
-    # create temp branch
-    utils.cmd_exec(["git", "checkout", "-b", "theme_updater_temp", old_branch_name])
-
-    # show config/settings_data.json first 100 lines
-    click.echo(f"config/settings_schema.json:")
-    with open("config/settings_schema.json") as f:
-        click.echo(f.read()[:100])
+    # create temp branch from old version
+    utils.cmd_exec(
+        ["git", "checkout", "-b", "theme_updater_temp", branch_name_theme_version_old]
+    )
 
     # copy everything except config/settings_data.json and templates/*.json
     shutil.copytree(
@@ -137,28 +140,17 @@ def update(ctx):
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns("config/settings_data.json", "templates/*.json"),
     )
-
-    # show config/settings_data.json first 100 lines
-    click.echo(f"config/settings_schema.json:")
-    with open("config/settings_schema.json") as f:
-        click.echo(f.read()[:100])
-
     shutil.rmtree("tmp_new_version")
 
     # commit changes
-    subprocess.run(["git", "status"])
     utils.cmd_exec(["git", "add", "."])
     utils.cmd_exec(["git", "commit", "-m", "tes: update theme"])
 
     # go back to staging branch
-    utils.cmd_exec(["git", "checkout", "staging"])
+    utils.cmd_exec(["git", "checkout", branch_name_staging])
+    utils.cmd_exec(["git", "rebase", "--interactive", branch_name_temp, "--dry-run"])
 
-    # show config/settings_data.json first 100 lines
-    click.echo(f"config/settings_schema.json:")
-    with open("config/settings_schema.json") as f:
-        click.echo(f.read()[:100])
-
-    click.echo("Merge new version into current branch...")
+    # click.echo("Merge new version into current branch...")
     # subprocess.run(["git", "rebase", "theme_updater_temp"])
     click.echo("Shopify theme updated!")
 
