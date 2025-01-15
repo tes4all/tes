@@ -2,3 +2,5 @@
 click
 # cli.shopify.theme_updater
 pyyaml
+# cli.shopify.printess
+requests
