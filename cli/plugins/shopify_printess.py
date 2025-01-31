@@ -1,7 +1,9 @@
 import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 import click
 import requests
+from . import utils
 
 
 @click.group()
@@ -16,19 +18,33 @@ def printess(ctx):
 def update(ctx):
     """Update the Shopify theme."""
 
-    files_to_update = {
-        "snippets/printess-add-to-basket.liquid": "https://gist.githubusercontent.com/PrintessEditor/eaf528a693e44b4d7c1efde7fa50d8dd/raw/5b218b8278a536c2c39824fd76c80e5072dd1133/printess-add-to-basket.liquid",
-        "snippets/printess-cart-edit-button.liquid": "https://gist.githubusercontent.com/PrintessEditor/eaf528a693e44b4d7c1efde7fa50d8dd/raw/5b218b8278a536c2c39824fd76c80e5072dd1133/printess-cart-edit-button.liquid",
-        "snippets/printess-thumbnail.liquid": "https://gist.githubusercontent.com/PrintessEditor/eaf528a693e44b4d7c1efde7fa50d8dd/raw/5b218b8278a536c2c39824fd76c80e5072dd1133/printess-thumbnail.liquid",
-        "assets/printesseditor.css": "https://gist.githubusercontent.com/PrintessEditor/eaf528a693e44b4d7c1efde7fa50d8dd/raw/5b218b8278a536c2c39824fd76c80e5072dd1133/printesseditor.css",
-        "assets/printessShopify.js": "https://gist.githubusercontent.com/PrintessEditor/eaf528a693e44b4d7c1efde7fa50d8dd/raw/5b218b8278a536c2c39824fd76c80e5072dd1133/printessShopify.js",
-        "assets/printessEditor.js": "https://gist.githubusercontent.com/PrintessEditor/eaf528a693e44b4d7c1efde7fa50d8dd/raw/5b218b8278a536c2c39824fd76c80e5072dd1133/printessEditor.js",
-        "snippets/printess-render-design-now-button.liquid": "https://gist.githubusercontent.com/PrintessEditor/eaf528a693e44b4d7c1efde7fa50d8dd/raw/5b218b8278a536c2c39824fd76c80e5072dd1133/render-design-now%2520button.liquid",
-        "snippets/printess-theme.liquid": "https://gist.githubusercontent.com/PrintessEditor/eaf528a693e44b4d7c1efde7fa50d8dd/raw/5b218b8278a536c2c39824fd76c80e5072dd1133/theme.liquid",
+    printess_gist_url = "git@gist.github.com:eaf528a693e44b4d7c1efde7fa50d8dd.git"
+    # rm dir if exists
+    if os.path.exists("printess_temp"):
+        shutil.rmtree("printess_temp")
+
+    # clone gist
+    utils.cmd_exec(["git", "clone", printess_gist_url, "printess_temp"])
+
+    files_to_move = {
+        "printess-add-to-basket.liquid": "snippets/printess-add-to-basket.liquid",
+        "printess-cart-edit-button.liquid": "snippets/printess-cart-edit-button.liquid",
+        "printess-thumbnail.liquid": "snippets/printess-thumbnail.liquid",
+        "printesseditor.css": "assets/printesseditor.css",
+        "printessShopify.js": "assets/printessShopify.js",
+        "printessEditor.js": "assets/printessEditor.js",
+        "render-design-now button.liquid": "snippets/printess-render-design-now-button.liquid",
+        "theme.liquid": "snippets/printess-theme.liquid",
     }
 
     # Start downloading
-    _download_files_in_parallel(files_to_update)
+    for file_name, destination in files_to_move.items():
+        source = os.path.join("printess_temp", file_name)
+        destination = os.path.join(utils.WORK_FOLDER, destination)
+        shutil.move(source, destination)
+
+    # remove temp folder
+    shutil.rmtree("printess_temp")
     click.echo("Shopify printess updated!")
 
 
