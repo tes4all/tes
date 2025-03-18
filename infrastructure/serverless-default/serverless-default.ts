@@ -1,3 +1,5 @@
+import { execSync } from "node:child_process"
+
 // Typdefinitionen für Serverless
 interface ServerlessInstance {
   service: {
@@ -31,6 +33,8 @@ interface ServerlessOptions {
 }
 
 async function execCommand(command: string, args: string): Promise<string> {
+  return await execSync(command).toString().trim()
+
   const process = new Deno.Command(command, {
     args: args.split(" "),
     stdout: "piped",
