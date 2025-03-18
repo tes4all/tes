@@ -1,0 +1,6 @@
+{
+  "name": "@tes/serverelss-default",
+  "version": "0.1.0",
+  "license": "MIT",
+  "exports": "./serverless-default.ts"
+}
