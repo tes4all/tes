@@ -85,7 +85,7 @@ class ServerlessDefault {
     this.setProviderConfig()
     this.setPackageConfig()
 
-    await this.setEnvFromSSM(`${this.stage}/tes/db`, "TES_DB_URI")
+    await this.setEnvFromSSM(`TES_DB_URI-${this.stage}`, "TES_DB_URI")
     this.setFunctionDefaults()
   }
 
