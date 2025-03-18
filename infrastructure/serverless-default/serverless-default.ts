@@ -33,7 +33,7 @@ interface ServerlessOptions {
 }
 
 async function execCommand(command: string, args: string): Promise<string> {
-  return await execSync(command).toString().trim()
+  return await execSync(`${command} ${args}`).toString().trim()
 
   const process = new Deno.Command(command, {
     args: args.split(" "),
@@ -85,7 +85,7 @@ class ServerlessDefault {
     this.setProviderConfig()
     this.setPackageConfig()
 
-    await this.setEnvFromSSM(`sls-tes-base-db-uri-${this.stage}`, "TES_DB_URI")
+    await this.setEnvFromSSM(`${this.stage}/tes/db`, "TES_DB_URI")
     this.setFunctionDefaults()
   }
 
