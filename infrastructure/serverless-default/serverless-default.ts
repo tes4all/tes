@@ -185,7 +185,7 @@ class ServerlessDefault {
 
     providerConfig.layers = providerConfig.layers || []
     providerConfig.layers.push({
-      Ref: "PythonRequirementsLambdaLayer",
+      "!Ref": "PythonRequirementsLambdaLayer",
     })
   }
 
