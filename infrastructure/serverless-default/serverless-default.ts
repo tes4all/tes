@@ -136,7 +136,7 @@ class ServerlessDefault {
       useStaticCache: true,
       invalidateCaches: true,
       pipCmdExtraArgs: [
-        "--platform=manylinux2014_x86_64",
+        "--platform=manylinux2014_aarch64",
         "--only-binary=:all:",
       ],
     }
