@@ -88,7 +88,7 @@ class ServerlessDefault {
     // set environment variables from SSM
     this.serverless.service.provider.environment[
       "TES_DB_URI"
-    ] = `\${ssm:/TES_DB_URI-${this.stage}~true}`
+    ] = `\${ssm:TES_DB_URI-${this.stage}~true}`
 
     //await this.setEnvFromSSM(`TES_DB_URI-${this.stage}`, "TES_DB_URI")
     this.setFunctionDefaults()
