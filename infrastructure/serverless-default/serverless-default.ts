@@ -183,10 +183,13 @@ class ServerlessDefault {
       },
     ]
 
+    /*
+
     providerConfig.layers = providerConfig.layers || []
     providerConfig.layers.push({
       "!Ref": "PythonRequirementsLambdaLayer",
     })
+      */
   }
 
   setPackageConfig(): void {
@@ -221,10 +224,17 @@ class ServerlessDefault {
         functionConfig[functionName].events[event].cors =
           customConfig.defaultCors
       }
+      /*
       const provisionedConcurrency =
         customConfig.provisionedConcurrency[this.stage] || 0
       functionConfig[functionName].provisionedConcurrency =
         provisionedConcurrency
+        */
+      functionConfig[functionName].layers =
+        functionConfig[functionName].layers || []
+      functionConfig[functionName].layers.push({
+        Ref: "PythonRequirementsLambdaLayer",
+      })
     }
   }
 }
