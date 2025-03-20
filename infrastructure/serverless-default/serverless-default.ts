@@ -216,8 +216,10 @@ class ServerlessDefault {
     for (const functionName in functionConfig) {
       // set default function settings
       for (let event in functionConfig[functionName].events) {
-        functionConfig[functionName].events[event].cors =
-          customConfig.defaultCors
+        for (let key in functionConfig[functionName].events[event]) {
+          functionConfig[functionName].events[event][key].cors =
+            customConfig.defaultCors
+        }
       }
       /*
       const provisionedConcurrency =
