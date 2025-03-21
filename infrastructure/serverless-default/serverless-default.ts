@@ -217,8 +217,10 @@ class ServerlessDefault {
       // set default function settings
       for (let event in functionConfig[functionName].events) {
         for (let key in functionConfig[functionName].events[event]) {
-          functionConfig[functionName].events[event][key].cors =
-            customConfig.defaultCors
+          if (key === "http" || key === "httpApi") {
+            functionConfig[functionName].events[event][key].cors =
+              customConfig.defaultCors
+          }
         }
       }
       /*
