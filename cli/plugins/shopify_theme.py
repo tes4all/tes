@@ -131,6 +131,7 @@ def update(ctx):
     branch_name_theme_version_old = _get_branch_name_theme(
         theme_info["theme_name"], theme_info["theme_version"]
     )
+
     if not _branch_exists(branch_name_theme_version_old):
         click.echo(f"Branch {branch_name_theme_version_old} does not exist.")
         return
@@ -143,6 +144,9 @@ def update(ctx):
     branch_name_theme_version_new = _get_branch_name_theme(
         new_theme_info["theme_name"], new_theme_info["theme_version"]
     )
+
+    click.echo(f"Old Version: {branch_name_theme_version_old}.")
+    click.echo(f"New Version: {branch_name_theme_version_new}.")
     utils.cmd_exec(["git", "checkout", branch_name_theme_version_new])
 
     # copy everything to a temp folder
@@ -174,9 +178,8 @@ def update(ctx):
     utils.cmd_exec(["git", "checkout", branch_name_staging])
     subprocess.run(["git", "diff", "--stat", branch_name_staging, branch_name_temp])
 
-    # click.echo("Merge new version into current branch...")
-    # subprocess.run(["git", "rebase", "theme_updater_temp"])
     click.echo("Shopify theme ready to merge!")
+    click.echo("Now you can merge the new version: git merge theme_updater_staging")
 
 
 def _get_branch_name_theme(theme_name, theme_version):
@@ -229,45 +232,32 @@ def _get_theme_info(use_current_folder=False):
 
 def _get_theme_name(store):
     # Run the Shopify CLI command
-    result = utils.cmd_exec(["shopify", "theme", "list", f"--store={store}"])
+    result = utils.cmd_exec(["shopify", "theme", "list", "--json", f"--store={store}"])
 
     # Check for errors
     if result.returncode != 0:
         raise RuntimeError(f"Error running command: {result.stderr.strip()}")
 
     # Parse the output
-    lines = result.stdout.strip().splitlines()
-    for line in lines[3:]:  # Skip the first 3 lines (header and divider lines)
-        parts = line.split()  # Split the line into columns
-        name = " ".join(parts[:-2])  # Extract the 'name' field
-        # role = parts[-2]  # Extract the 'role' field
-        # theme_id = parts[-1]  # Extract the 'id' field
-
-        # return first theme with DO_NOT_CHANGE_ prefix
-        if name.startswith("DO_NOT_CHANGE_"):
-            return name
-
+    themes = json.loads(result.stdout.strip())
+    for theme in themes:
+        if theme["name"].startswith("DO_NOT_CHANGE_"):
+            return theme["name"]
     return None
 
 
 def _raw_theme_exists(store, theme_name):
     # Run the Shopify CLI command
-    result = utils.cmd_exec(["shopify", "theme", "list", f"--store={store}"])
+    result = utils.cmd_exec(["shopify", "theme", "list", "--json", f"--store={store}"])
 
     # Check for errors
     if result.returncode != 0:
         raise RuntimeError(f"Error running command: {result.stderr.strip()}")
 
     # Parse the output
-    lines = result.stdout.strip().splitlines()
-    for line in lines[3:]:  # Skip the first 3 lines (header and divider lines)
-        parts = line.split()  # Split the line into columns
-        name = " ".join(parts[:-2])  # Extract the 'name' field
-        # role = parts[-2]  # Extract the 'role' field
-        # theme_id = parts[-1]  # Extract the 'id' field
-
-        if name == f"DO_NOT_CHANGE_{theme_name}":
-            # return theme_id.lstrip("#")
+    themes = json.loads(result.stdout.strip())
+    for theme in themes:
+        if theme["name"] == f"DO_NOT_CHANGE_{theme_name}":
             return True
 
     return False
