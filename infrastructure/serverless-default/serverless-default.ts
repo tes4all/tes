@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process"
+import path from "node:path"
 
 // Typdefinitionen für Serverless
 interface ServerlessInstance {
@@ -21,6 +22,7 @@ interface ServerlessInstance {
     layers?: Record<string, any>
     functions: Record<string, any>
     package?: Record<string, any>
+    resources?: Record<string, any>
   }
   configurationInput: {
     provider: Record<string, any>
@@ -87,6 +89,7 @@ class ServerlessDefault {
 
     await this.setEnvFromSSM(`TES_DB_URI-${this.stage}`, "TES_DB_URI")
     this.setFunctionDefaults()
+    this.setResources()
   }
 
   setCustomConfig(): void {
@@ -135,11 +138,60 @@ class ServerlessDefault {
         "--only-binary=:all:",
       ],
     }
+    if (customConfig.tes?.type === "frontend") {
+      const customerCode = customConfig.tes.customerCode
+      const customerName = customConfig.tes.customerName
+      const projectName = customConfig.tes.projectName
+      customConfig.s3bucket = `${customerCode}-${customerName}/${projectName}/${this.stage}`
+
+      customConfig.assets = {
+        auto: true,
+        targets: [
+          {
+            bucket: "frontend--websites",
+            empty: true,
+            prefix: customConfig.s3bucket,
+            files: [
+              {
+                source: ".output/public/",
+                globs: "**/**",
+                headers: {
+                  CacheControl: "no-cache",
+                },
+              },
+            ],
+          },
+        ],
+      }
+
+      customConfig.certificate = {
+        dev: "arn:aws:acm:us-east-1:495963541969:certificate/5976467c-2761-4293-a0df-ed47f8c33b3b",
+        test: "arn:aws:acm:us-east-1:495963541969:certificate/5976467c-2761-4293-a0df-ed47f8c33b3b",
+        prod:
+          customConfig.tes.prod?.certificate ||
+          "arn:aws:acm:us-east-1:495963541969:certificate/5976467c-2761-4293-a0df-ed47f8c33b3b",
+      }
+
+      customConfig.aliases = {
+        dev: `dev-${customerCode}-${projectName}.4pd3v.com`,
+        test: `test-${customerCode}-${projectName}.4pd3v.com`,
+        prod:
+          customConfig.tes.prod?.alias ||
+          `live-${customerCode}-${projectName}.4pd3v.com`,
+      }
+
+      customConfig.cloudfrontInvalidate = {
+        distributionIdKey: "CDNDistributionId",
+        autoInvalidate: true,
+        items: ["/*"],
+      }
+    }
   }
 
   setProviderConfig(): void {
     const providerConfig = this.serverless.service.provider || {}
     const inputConfig = this.serverless.configurationInput.provider
+
     providerConfig.deploymentBucket = "kinayu--serverless-deployments"
     providerConfig.deploymentBucketObject = {
       name: "kinayu--serverless-deployments",
@@ -156,6 +208,10 @@ class ServerlessDefault {
     if (!inputConfig.timeout) {
       providerConfig.timeout = 20
     }
+    if (!inputConfig.region) {
+      providerConfig.region = "eu-central-1"
+    }
+
     providerConfig.deploymentMethod = "direct"
     providerConfig.versionFunctions = false
     providerConfig.logRetentionInDays = 14
@@ -189,20 +245,26 @@ class ServerlessDefault {
 
   setPackageConfig(): void {
     const packageConfig = this.serverless.service.package || {}
+    const customConfig = this.serverless.service.custom || {}
+
     packageConfig.excludeDevDependencies = true
-    packageConfig.patterns = [
-      "!bin",
-      "!venv",
-      "!node_modules",
-      "!yml",
-      "!package*",
-      "!pyproject.toml",
-      "!requirements*",
-      "!LICENSE",
-      "!README*",
-      "!test*",
-      "!.*",
-    ]
+    if (customConfig.tes?.type === "frontend") {
+      packageConfig.patterns = ["!**", ".output/server/**"]
+    } else {
+      packageConfig.patterns = [
+        "!bin",
+        "!venv",
+        "!node_modules",
+        "!yml",
+        "!package*",
+        "!pyproject.toml",
+        "!requirements*",
+        "!LICENSE",
+        "!README*",
+        "!test*",
+        "!.*",
+      ]
+    }
   }
 
   setFunctionDefaults(): void {
@@ -212,28 +274,252 @@ class ServerlessDefault {
       throw new Error("Custom config not set")
     }
 
-    // loop over functions
-    for (const functionName in functionConfig) {
-      // set default function settings
-      for (let event in functionConfig[functionName].events) {
-        for (let key in functionConfig[functionName].events[event]) {
-          if (key === "http" || key === "httpApi") {
-            functionConfig[functionName].events[event][key].cors =
-              customConfig.defaultCors
+    if (customConfig.tes?.type === "frontend") {
+      functionConfig["cfOriginRequest"] = {
+        handler: ".output/server/index.handler",
+        events: [
+          {
+            http: {
+              method: "GET",
+              path: "/",
+              cors: true,
+            },
+          },
+          {
+            http: {
+              method: "GET",
+              path: "/{proxy+}",
+              cors: true,
+            },
+          },
+        ],
+      }
+    } else {
+      // loop over functions
+      for (const functionName in functionConfig) {
+        // set default function settings
+        for (let event in functionConfig[functionName].events) {
+          for (let key in functionConfig[functionName].events[event]) {
+            if (key === "http" || key === "httpApi") {
+              functionConfig[functionName].events[event][key].cors =
+                customConfig.defaultCors
+            }
           }
         }
+        /*
+        const provisionedConcurrency =
+          customConfig.provisionedConcurrency[this.stage] || 0
+        functionConfig[functionName].provisionedConcurrency =
+          provisionedConcurrency
+          */
+        functionConfig[functionName].layers =
+          functionConfig[functionName].layers || []
+        functionConfig[functionName].layers.push({
+          Ref: "PythonRequirementsLambdaLayer",
+        })
       }
+    }
+  }
+
+  setResources(): void {
+    const customConfig = this.serverless.service.custom || {}
+    const resourcesConfig = this.serverless.service.resources || {}
+
+    if (customConfig.tes?.type === "frontend") {
       /*
-      const provisionedConcurrency =
-        customConfig.provisionedConcurrency[this.stage] || 0
-      functionConfig[functionName].provisionedConcurrency =
-        provisionedConcurrency
-        */
-      functionConfig[functionName].layers =
-        functionConfig[functionName].layers || []
-      functionConfig[functionName].layers.push({
-        Ref: "PythonRequirementsLambdaLayer",
-      })
+      resources:
+  Resources:
+    CloudFrontDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Aliases: ${self:custom.aliases.${opt:stage, 'dev'}}
+          Origins:
+            - Id: static
+              DomainName: frontend--websites.s3-website.eu-central-1.amazonaws.com
+              OriginPath: /${self:custom.s3bucket}
+              CustomOriginConfig:
+                HTTPPort: 80
+                HTTPSPort: 443
+                OriginProtocolPolicy: 'http-only'
+              ConnectionAttempts: 3
+              ConnectionTimeout: 10
+            - Id: ssr
+              DomainName: !Sub '${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com'
+              OriginPath: "/${self:custom.basePath.${opt:stage, 'dev'}}"
+              CustomOriginConfig:
+                HTTPSPort: 443
+                OriginProtocolPolicy: https-only
+                OriginSSLProtocols:
+                  - TLSv1.2
+
+          CacheBehaviors:
+            - PathPattern: /_nuxt/*
+              AllowedMethods:
+                - GET
+                - HEAD
+                - OPTIONS
+              TargetOriginId: static
+              CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+              ViewerProtocolPolicy: redirect-to-https
+              ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # SecurityHeadersPolicy
+              Compress: true
+            - PathPattern: /favicon.ico
+              AllowedMethods:
+                - GET
+                - HEAD
+                - OPTIONS
+              TargetOriginId: static
+              CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+              ViewerProtocolPolicy: redirect-to-https
+              ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # SecurityHeadersPolicy
+              Compress: true
+            - PathPattern: /static/*
+              AllowedMethods:
+                - GET
+                - HEAD
+                - OPTIONS
+              TargetOriginId: static
+              CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+              ViewerProtocolPolicy: redirect-to-https
+              ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # SecurityHeadersPolicy
+              Compress: true
+
+          DefaultCacheBehavior:
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            TargetOriginId: ssr
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
+            ViewerProtocolPolicy: redirect-to-https
+            ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # SecurityHeadersPolicy
+          CustomErrorResponses:
+            - ErrorCachingMinTTL: 86400 # cache errors for 24h
+              ErrorCode: 403 # object not found in bucket
+              ResponseCode: 404
+              ResponsePagePath: /404
+            - ErrorCachingMinTTL: 86400 # cache errors for 24h
+              ErrorCode: 404 # object not found in bucket
+              ResponseCode: 404
+              ResponsePagePath: /404
+          Comment: ${self:custom.s3bucket}
+          PriceClass: PriceClass_100
+          Enabled: true
+          ViewerCertificate:
+            AcmCertificateArn: ${self:custom.certificate.${opt:stage, 'dev'}}
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          HttpVersion: http2and3
+
+  Outputs:
+    CDNDistributionId:
+      Description: 'CloudFront Distribution ID'
+      Value: !GetAtt CloudFrontDistribution.Id
+      */
+      resourcesConfig.Resources = resourcesConfig.Resources || {}
+      ;(resourcesConfig.Resources.CloudFrontDistribution = {
+        Type: "AWS::CloudFront::Distribution",
+        Properties: {
+          DistributionConfig: {
+            Aliases: customConfig.aliases[this.stage],
+            Origins: [
+              {
+                Id: "static",
+                DomainName:
+                  "frontend--websites.s3-website.eu-central-1.amazonaws.com",
+                OriginPath: `/${customConfig.s3bucket}`,
+                CustomOriginConfig: {
+                  HTTPPort: 80,
+                  HTTPSPort: 443,
+                  OriginProtocolPolicy: "http-only",
+                  ConnectionAttempts: 3,
+                  ConnectionTimeout: 10,
+                },
+              },
+              {
+                Id: "ssr",
+                DomainName: {
+                  "Fn::Sub":
+                    "${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com",
+                },
+                OriginPath: `/${customConfig.basePath[this.stage]}`,
+                CustomOriginConfig: {
+                  HTTPSPort: 443,
+                  OriginProtocolPolicy: "https-only",
+                  OriginSSLProtocols: ["TLSv1.2"],
+                },
+              },
+            ],
+            CacheBehaviors: [
+              {
+                PathPattern: "/_nuxt/*",
+                AllowedMethods: ["GET", "HEAD", "OPTIONS"],
+                TargetOriginId: "static",
+                CachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
+                ViewerProtocolPolicy: "redirect-to-https",
+                ResponseHeadersPolicyId: "67f7725c-6f97-4210-82d7-5512b31e9d03", // SecurityHeadersPolicy
+                Compress: true,
+              },
+              {
+                PathPattern: "/favicon.ico",
+                AllowedMethods: ["GET", "HEAD", "OPTIONS"],
+                TargetOriginId: "static",
+                CachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
+                ViewerProtocolPolicy: "redirect-to-https",
+                ResponseHeadersPolicyId: "67f7725c-6f97-4210-82d7-5512b31e9d03", // SecurityHeadersPolicy
+                Compress: true,
+              },
+              {
+                PathPattern: "/static/*",
+                AllowedMethods: ["GET", "HEAD", "OPTIONS"],
+                TargetOriginId: "static",
+                CachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
+                ViewerProtocolPolicy: "redirect-to-https",
+                ResponseHeadersPolicyId: "67f7725c-6f97-4210-82d7-5512b31e9d03", // SecurityHeadersPolicy
+                Compress: true,
+              },
+            ],
+            DefaultCacheBehavior: {
+              AllowedMethods: ["GET", "HEAD", "OPTIONS"],
+              TargetOriginId: "ssr",
+              CachePolicyId: "658327ea-f89d-4fab-a63d-7e88639e58f6", // CachingOptimized
+              ViewerProtocolPolicy: "redirect-to-https",
+              ResponseHeadersPolicyId: "67f7725c-6f97-4210-82d7-5512b31e9d03", // SecurityHeadersPolicy
+            },
+            CustomErrorResponses: [
+              {
+                ErrorCachingMinTTL: 86400, // cache errors for 24h
+                ErrorCode: 403, // object not found in bucket
+                ResponseCode: 404,
+                ResponsePagePath: "/404",
+              },
+              {
+                ErrorCachingMinTTL: 86400, // cache errors for 24h
+                ErrorCode: 404, // object not found in bucket
+                ResponseCode: 404,
+                ResponsePagePath: "/404",
+              },
+            ],
+            Comment: customConfig.s3bucket,
+            PriceClass: "PriceClass_100",
+            Enabled: true,
+            ViewerCertificate: {
+              AcmCertificateArn: customConfig.certificate[this.stage],
+              SslSupportMethod: "sni-only",
+              MinimumProtocolVersion: "TLSv1.2_2021",
+            },
+            HttpVersion: "http2and3",
+          },
+        },
+      }),
+        (resourcesConfig.Outputs = resourcesConfig.Outputs || {})
+      resourcesConfig.Outputs.CDNDistributionId = {
+        Description: "CloudFront Distribution ID",
+        Value: {
+          "Fn::GetAtt": ["CloudFrontDistribution", "Id"],
+        },
+      }
     }
   }
 }
