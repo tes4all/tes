@@ -100,44 +100,6 @@ class ServerlessDefault {
     customConfig.provisionedConcurrency = { dev: 0, prod: 0 }
     customConfig.lambdaInsights = { defaultLambdaInsights: true }
 
-    if (customConfig.customDomain?.rest) {
-      const basePath = customConfig.basePath[this.stage]
-      customConfig.customDomain.rest.basePath = basePath
-      customConfig.customDomain.rest.createRoute53Record = true
-      customConfig.customDomain.rest.apiType = "http"
-      customConfig.customDomain.rest.endpointType = "edge"
-      customConfig.customDomain.rest.autoDomain = false
-    }
-
-    customConfig.defaultCors = {
-      origin: "*",
-      headers: [
-        "Content-Type",
-        "X-Amz-Date",
-        "Authorization",
-        "X-Api-Key",
-        "X-Amz-Security-Token",
-        "X-Amz-User-Agent",
-        "X-Amzn-Trace-Id",
-        "m-g-session",
-        "M-G-Session",
-        "m-profile",
-        "M-Profile",
-      ],
-      allowCredentials: true,
-    }
-    customConfig.pythonRequirements = {
-      layer: true,
-      strip: true,
-      slim: true,
-      useDownloadCache: true,
-      useStaticCache: true,
-      invalidateCaches: true,
-      pipCmdExtraArgs: [
-        "--platform=manylinux2014_aarch64",
-        "--only-binary=:all:",
-      ],
-    }
     if (customConfig.tes?.type === "frontend") {
       const customerCode = customConfig.tes.customerCode
       const customerName = customConfig.tes.customerName
@@ -185,6 +147,45 @@ class ServerlessDefault {
         autoInvalidate: true,
         items: ["/*"],
       }
+    } else {
+      if (customConfig.customDomain?.rest) {
+        const basePath = customConfig.basePath[this.stage]
+        customConfig.customDomain.rest.basePath = basePath
+        customConfig.customDomain.rest.createRoute53Record = true
+        customConfig.customDomain.rest.apiType = "http"
+        customConfig.customDomain.rest.endpointType = "edge"
+        customConfig.customDomain.rest.autoDomain = false
+      }
+
+      customConfig.defaultCors = {
+        origin: "*",
+        headers: [
+          "Content-Type",
+          "X-Amz-Date",
+          "Authorization",
+          "X-Api-Key",
+          "X-Amz-Security-Token",
+          "X-Amz-User-Agent",
+          "X-Amzn-Trace-Id",
+          "m-g-session",
+          "M-G-Session",
+          "m-profile",
+          "M-Profile",
+        ],
+        allowCredentials: true,
+      }
+      customConfig.pythonRequirements = {
+        layer: true,
+        strip: true,
+        slim: true,
+        useDownloadCache: true,
+        useStaticCache: true,
+        invalidateCaches: true,
+        pipCmdExtraArgs: [
+          "--platform=manylinux2014_aarch64",
+          "--only-binary=:all:",
+        ],
+      }
     }
   }
 
@@ -207,9 +208,6 @@ class ServerlessDefault {
     }
     if (!inputConfig.timeout) {
       providerConfig.timeout = 20
-    }
-    if (!inputConfig.region) {
-      providerConfig.region = "eu-central-1"
     }
 
     providerConfig.deploymentMethod = "direct"
