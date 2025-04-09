@@ -27,6 +27,7 @@ interface ServerlessInstance {
   configurationInput: {
     provider: Record<string, any>
   }
+  getProvider: (providerName: string) => any
 }
 
 interface ServerlessOptions {
@@ -59,15 +60,35 @@ class ServerlessDefault {
   private options: ServerlessOptions
   private stage: string
   private hooks: Record<string, () => void>
+  private provider: string
+  private aws: any
+  private proxyURL: string | undefined
 
   constructor(serverless: ServerlessInstance, options: ServerlessOptions) {
     this.serverless = serverless
     this.options = options
     this.stage = this.options["stage"] || this.serverless.service.provider.stage
     this.serverless.service.provider.stage = this.options["stage"] || "dev"
+    this.provider = "aws"
+    this.aws = this.serverless.getProvider("aws")
+    this.proxyURL =
+      process.env.proxy ||
+      process.env.HTTP_PROXY ||
+      process.env.http_proxy ||
+      process.env.HTTPS_PROXY ||
+      process.env.https_proxy
+
+    if (this.proxyURL) {
+      this.setProxy(this.proxyURL)
+    }
+
+    if (this.options.cacert) {
+      this.handleCaCert(this.options.cacert)
+    }
+
     this.hooks = {
       initialize: () => this.init(),
-      //'before:package:package': () => this.beforePackage(),
+      "after:deploy:deploy": this.afterDeploy.bind(this),
     }
   }
 
@@ -324,97 +345,6 @@ class ServerlessDefault {
     const resourcesConfig = this.serverless.service.resources || {}
 
     if (customConfig.tes?.type === "frontend") {
-      /*
-resources:
-  Resources:
-    CloudFrontDistribution:
-      Type: AWS::CloudFront::Distribution
-      Properties:
-        DistributionConfig:
-          Aliases: ${self:custom.aliases.${opt:stage, 'dev'}}
-          Origins:
-            - Id: static
-              DomainName: frontend--websites.s3-website.eu-central-1.amazonaws.com
-              OriginPath: /${self:custom.s3bucket}
-              CustomOriginConfig:
-                HTTPPort: 80
-                HTTPSPort: 443
-                OriginProtocolPolicy: 'http-only'
-              ConnectionAttempts: 3
-              ConnectionTimeout: 10
-            - Id: ssr
-              DomainName: !Sub '${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com'
-              OriginPath: "/${self:custom.basePath.${opt:stage, 'dev'}}"
-              CustomOriginConfig:
-                HTTPSPort: 443
-                OriginProtocolPolicy: https-only
-                OriginSSLProtocols:
-                  - TLSv1.2
-
-          CacheBehaviors:
-            - PathPattern: /_nuxt/*
-              AllowedMethods:
-                - GET
-                - HEAD
-                - OPTIONS
-              TargetOriginId: static
-              CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
-              ViewerProtocolPolicy: redirect-to-https
-              ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # SecurityHeadersPolicy
-              Compress: true
-            - PathPattern: /favicon.ico
-              AllowedMethods:
-                - GET
-                - HEAD
-                - OPTIONS
-              TargetOriginId: static
-              CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
-              ViewerProtocolPolicy: redirect-to-https
-              ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # SecurityHeadersPolicy
-              Compress: true
-            - PathPattern: /static/*
-              AllowedMethods:
-                - GET
-                - HEAD
-                - OPTIONS
-              TargetOriginId: static
-              CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
-              ViewerProtocolPolicy: redirect-to-https
-              ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # SecurityHeadersPolicy
-              Compress: true
-
-          DefaultCacheBehavior:
-            AllowedMethods:
-              - GET
-              - HEAD
-              - OPTIONS
-            TargetOriginId: ssr
-            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # CachingOptimized
-            ViewerProtocolPolicy: redirect-to-https
-            ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # SecurityHeadersPolicy
-          CustomErrorResponses:
-            - ErrorCachingMinTTL: 86400 # cache errors for 24h
-              ErrorCode: 403 # object not found in bucket
-              ResponseCode: 404
-              ResponsePagePath: /404
-            - ErrorCachingMinTTL: 86400 # cache errors for 24h
-              ErrorCode: 404 # object not found in bucket
-              ResponseCode: 404
-              ResponsePagePath: /404
-          Comment: ${self:custom.s3bucket}
-          PriceClass: PriceClass_100
-          Enabled: true
-          ViewerCertificate:
-            AcmCertificateArn: ${self:custom.certificate.${opt:stage, 'dev'}}
-            SslSupportMethod: sni-only
-            MinimumProtocolVersion: TLSv1.2_2021
-          HttpVersion: http2and3
-
-  Outputs:
-    CDNDistributionId:
-      Description: 'CloudFront Distribution ID'
-      Value: !GetAtt CloudFrontDistribution.Id
-      */
       resourcesConfig.Resources = resourcesConfig.Resources || {}
       ;(resourcesConfig.Resources.CloudFrontDistribution = {
         Type: "AWS::CloudFront::Distribution",
@@ -519,6 +449,155 @@ resources:
         },
       }
     }
+  }
+
+  setProxy(proxyURL): void {
+    this.aws.sdk.config.update({
+      httpOptions: { agent: proxy(proxyURL) },
+    })
+  }
+
+  handleCaCert(caCert): void {
+    const cli = this.serverless.cli
+
+    if (!fs.existsSync(caCert)) {
+      throw new Error(
+        "Supplied cacert option to a file that does not exist: " + caCert
+      )
+    }
+
+    this.aws.sdk.config.update({
+      httpOptions: { agent: new https.Agent({ ca: fs.readFileSync(caCert) }) },
+    })
+
+    cli.consoleLog(
+      `CloudfrontInvalidate: ${chalk.yellow("ca cert handling enabled")}`
+    )
+  }
+
+  createInvalidation(distributionId, reference, cloudfrontInvalidate): void {
+    const cli = this.serverless.cli
+    const cloudfrontInvalidateItems = cloudfrontInvalidate.items
+
+    const params = {
+      DistributionId: distributionId /* required */,
+      InvalidationBatch: {
+        /* required */ CallerReference: reference /* required */,
+        Paths: {
+          /* required */
+          Quantity: cloudfrontInvalidateItems.length /* required */,
+          Items: cloudfrontInvalidateItems,
+        },
+      },
+    }
+    return this.aws.request("CloudFront", "createInvalidation", params).then(
+      () => {
+        cli.consoleLog(
+          `CloudfrontInvalidate: ${chalk.yellow("Invalidation started")}`
+        )
+      },
+      (err) => {
+        cli.consoleLog(JSON.stringify(err))
+        cli.consoleLog(
+          `CloudfrontInvalidate: ${chalk.yellow("Invalidation failed")}`
+        )
+        throw err
+      }
+    )
+  }
+
+  invalidateElements(elements: string[]): void {
+    const cli = this.serverless.cli
+
+    if (this.options.noDeploy) {
+      cli.consoleLog("skipping invalidation due to noDeploy option")
+      return
+    }
+
+    const invalidationPromises = elements.map((element) => {
+      let cloudfrontInvalidate = element
+      let reference = randomstring.generate(16)
+      let distributionId = cloudfrontInvalidate.distributionId
+      let stage = cloudfrontInvalidate.stage
+
+      if (
+        stage !== undefined &&
+        stage !== `${this.serverless.service.provider.stage}`
+      ) {
+        return
+      }
+
+      if (distributionId) {
+        cli.consoleLog(`DistributionId: ${chalk.yellow(distributionId)}`)
+
+        return this.createInvalidation(
+          distributionId,
+          reference,
+          cloudfrontInvalidate
+        )
+      }
+
+      if (!cloudfrontInvalidate.distributionIdKey) {
+        cli.consoleLog("distributionId or distributionIdKey is required")
+        return
+      }
+
+      cli.consoleLog(
+        `DistributionIdKey: ${chalk.yellow(
+          cloudfrontInvalidate.distributionIdKey
+        )}`
+      )
+
+      // get the id from the output of stack.
+      const stackName = this.serverless.getProvider("aws").naming.getStackName()
+
+      return this.aws
+        .request("CloudFormation", "describeStacks", { StackName: stackName })
+        .then((result) => {
+          if (result) {
+            const outputs = result.Stacks[0].Outputs
+            outputs.forEach((output) => {
+              if (output.OutputKey === cloudfrontInvalidate.distributionIdKey) {
+                distributionId = output.OutputValue
+              }
+            })
+          }
+        })
+        .then(() =>
+          this.createInvalidation(
+            distributionId,
+            reference,
+            cloudfrontInvalidate
+          )
+        )
+        .catch(() => {
+          cli.consoleLog(
+            "Failed to get DistributionId from stack output. Please check your serverless template."
+          )
+        })
+    })
+
+    return Promise.all(invalidationPromises)
+  }
+
+  afterDeploy() {
+    const customConfig = this.serverless.service.custom || {}
+    const elementsToInvalidate = customConfig.cloudfrontInvalidate.filter(
+      (element) => {
+        if (element.autoInvalidate !== false) {
+          return true
+        }
+
+        this.serverless.cli.consoleLog(
+          `Will skip invalidation for the distributionId "${
+            element.distributionId || element.distributionIdKey
+          }" as autoInvalidate is set to false.`
+        )
+        return false
+      }
+    )
+
+    return this.invalidateElements(elementsToInvalidate)
   }
 }
 
