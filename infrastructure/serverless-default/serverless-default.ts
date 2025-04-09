@@ -1,5 +1,6 @@
 import { execSync } from "node:child_process"
 import path from "node:path"
+import { randomBytes } from "crypto"
 
 // Typdefinitionen für Serverless
 interface ServerlessInstance {
@@ -24,10 +25,28 @@ interface ServerlessInstance {
     package?: Record<string, any>
     resources?: Record<string, any>
   }
+  cli: {
+    consoleLog: (message: string) => void
+    log: (message: string) => void
+    logError: (message: string) => void
+    logWarning: (message: string) => void
+    logSuccess: (message: string) => void
+    logInfo: (message: string) => void
+    logDebug: (message: string) => void
+    logVerbose: (message: string) => void
+  }
   configurationInput: {
     provider: Record<string, any>
   }
   getProvider: (providerName: string) => any
+}
+
+interface CloudFrontInvalidateConfig {
+  stage?: string
+  distributionId: string
+  distributionIdKey?: string
+  autoInvalidate?: boolean
+  items: string[]
 }
 
 interface ServerlessOptions {
@@ -62,7 +81,6 @@ class ServerlessDefault {
   private hooks: Record<string, () => void>
   private provider: string
   private aws: any
-  private proxyURL: string | undefined
 
   constructor(serverless: ServerlessInstance, options: ServerlessOptions) {
     this.serverless = serverless
@@ -71,20 +89,6 @@ class ServerlessDefault {
     this.serverless.service.provider.stage = this.options["stage"] || "dev"
     this.provider = "aws"
     this.aws = this.serverless.getProvider("aws")
-    this.proxyURL =
-      process.env.proxy ||
-      process.env.HTTP_PROXY ||
-      process.env.http_proxy ||
-      process.env.HTTPS_PROXY ||
-      process.env.https_proxy
-
-    if (this.proxyURL) {
-      this.setProxy(this.proxyURL)
-    }
-
-    if (this.options.cacert) {
-      this.handleCaCert(this.options.cacert)
-    }
 
     this.hooks = {
       initialize: () => this.init(),
@@ -451,31 +455,21 @@ class ServerlessDefault {
     }
   }
 
-  setProxy(proxyURL): void {
-    this.aws.sdk.config.update({
-      httpOptions: { agent: proxy(proxyURL) },
-    })
+  generateSecureRandomString(length: number): string {
+    return randomBytes(Math.ceil(length / 2))
+      .toString("hex")
+      .slice(0, length)
   }
 
-  handleCaCert(caCert): void {
-    const cli = this.serverless.cli
-
-    if (!fs.existsSync(caCert)) {
-      throw new Error(
-        "Supplied cacert option to a file that does not exist: " + caCert
-      )
-    }
-
-    this.aws.sdk.config.update({
-      httpOptions: { agent: new https.Agent({ ca: fs.readFileSync(caCert) }) },
-    })
-
-    cli.consoleLog(
-      `CloudfrontInvalidate: ${chalk.yellow("ca cert handling enabled")}`
-    )
+  colorYellow(text: string): string {
+    return `\x1b[33m${text}\x1b[0m`
   }
 
-  createInvalidation(distributionId, reference, cloudfrontInvalidate): void {
+  createInvalidation(
+    distributionId: string,
+    reference: string,
+    cloudfrontInvalidate: CloudFrontInvalidateConfig
+  ): void {
     const cli = this.serverless.cli
     const cloudfrontInvalidateItems = cloudfrontInvalidate.items
 
@@ -493,20 +487,22 @@ class ServerlessDefault {
     return this.aws.request("CloudFront", "createInvalidation", params).then(
       () => {
         cli.consoleLog(
-          `CloudfrontInvalidate: ${chalk.yellow("Invalidation started")}`
+          `CloudfrontInvalidate: ${this.colorYellow("Invalidation started")}`
         )
       },
-      (err) => {
+      (err: any) => {
         cli.consoleLog(JSON.stringify(err))
         cli.consoleLog(
-          `CloudfrontInvalidate: ${chalk.yellow("Invalidation failed")}`
+          `CloudfrontInvalidate: ${this.colorYellow("Invalidation failed")}`
         )
         throw err
       }
     )
   }
 
-  invalidateElements(elements: string[]): void {
+  invalidateElements(
+    elements: CloudFrontInvalidateConfig[]
+  ): Promise<any[]> | undefined {
     const cli = this.serverless.cli
 
     if (this.options.noDeploy) {
@@ -515,10 +511,10 @@ class ServerlessDefault {
     }
 
     const invalidationPromises = elements.map((element) => {
-      let cloudfrontInvalidate = element
-      let reference = randomstring.generate(16)
+      const cloudfrontInvalidate = element
+      const reference = this.generateSecureRandomString(16)
+      const stage = cloudfrontInvalidate.stage
       let distributionId = cloudfrontInvalidate.distributionId
-      let stage = cloudfrontInvalidate.stage
 
       if (
         stage !== undefined &&
@@ -528,7 +524,7 @@ class ServerlessDefault {
       }
 
       if (distributionId) {
-        cli.consoleLog(`DistributionId: ${chalk.yellow(distributionId)}`)
+        cli.consoleLog(`DistributionId: ${this.colorYellow(distributionId)}`)
 
         return this.createInvalidation(
           distributionId,
@@ -543,7 +539,7 @@ class ServerlessDefault {
       }
 
       cli.consoleLog(
-        `DistributionIdKey: ${chalk.yellow(
+        `DistributionIdKey: ${this.colorYellow(
           cloudfrontInvalidate.distributionIdKey
         )}`
       )
@@ -553,16 +549,22 @@ class ServerlessDefault {
 
       return this.aws
         .request("CloudFormation", "describeStacks", { StackName: stackName })
-        .then((result) => {
-          if (result) {
-            const outputs = result.Stacks[0].Outputs
-            outputs.forEach((output) => {
-              if (output.OutputKey === cloudfrontInvalidate.distributionIdKey) {
-                distributionId = output.OutputValue
-              }
-            })
+        .then(
+          (result: {
+            Stacks: { Outputs: { OutputKey: string; OutputValue: string }[] }[]
+          }) => {
+            if (result) {
+              const outputs = result.Stacks[0].Outputs
+              outputs.forEach((output) => {
+                if (
+                  output.OutputKey === cloudfrontInvalidate.distributionIdKey
+                ) {
+                  distributionId = output.OutputValue
+                }
+              })
+            }
           }
-        })
+        )
         .then(() =>
           this.createInvalidation(
             distributionId,
@@ -583,7 +585,11 @@ class ServerlessDefault {
   afterDeploy() {
     const customConfig = this.serverless.service.custom || {}
     const elementsToInvalidate = customConfig.cloudfrontInvalidate.filter(
-      (element) => {
+      (element: {
+        autoInvalidate?: boolean
+        distributionId?: string
+        distributionIdKey?: string
+      }) => {
         if (element.autoInvalidate !== false) {
           return true
         }
