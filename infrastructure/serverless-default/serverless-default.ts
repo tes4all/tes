@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto"
 // Typdefinitionen für Serverless
 interface ServerlessInstance {
   service: {
+    service: string
     provider: {
       stage: string
       environment: Record<string, string>
