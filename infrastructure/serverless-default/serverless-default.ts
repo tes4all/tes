@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process"
 import path from "node:path"
-import { randomBytes } from "crypto"
+import { randomBytes } from "node:crypto"
 
 // Typdefinitionen für Serverless
 interface ServerlessInstance {
