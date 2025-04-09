@@ -325,7 +325,7 @@ class ServerlessDefault {
 
     if (customConfig.tes?.type === "frontend") {
       /*
-      resources:
+resources:
   Resources:
     CloudFrontDistribution:
       Type: AWS::CloudFront::Distribution
@@ -420,19 +420,19 @@ class ServerlessDefault {
         Type: "AWS::CloudFront::Distribution",
         Properties: {
           DistributionConfig: {
-            Aliases: customConfig.aliases[this.stage],
+            Aliases: [customConfig.aliases[this.stage]],
             Origins: [
               {
                 Id: "static",
                 DomainName:
                   "frontend--websites.s3-website.eu-central-1.amazonaws.com",
                 OriginPath: `/${customConfig.s3bucket}`,
+                ConnectionAttempts: 3,
+                ConnectionTimeout: 10,
                 CustomOriginConfig: {
                   HTTPPort: 80,
                   HTTPSPort: 443,
                   OriginProtocolPolicy: "http-only",
-                  ConnectionAttempts: 3,
-                  ConnectionTimeout: 10,
                 },
               },
               {
