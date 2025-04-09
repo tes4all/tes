@@ -300,6 +300,7 @@ class ServerlessDefault {
     if (customConfig.tes?.type === "frontend") {
       functionConfig["cfOriginRequest"] = {
         handler: ".output/server/index.handler",
+        name: `${this.serverless.service.service}-${this.stage}-cfOriginRequest`,
         events: [
           {
             http: {
@@ -321,8 +322,8 @@ class ServerlessDefault {
       // loop over functions
       for (const functionName in functionConfig) {
         // set default function settings
-        for (let event in functionConfig[functionName].events) {
-          for (let key in functionConfig[functionName].events[event]) {
+        for (const event in functionConfig[functionName].events) {
+          for (const key in functionConfig[functionName].events[event]) {
             if (key === "http" || key === "httpApi") {
               functionConfig[functionName].events[event][key].cors =
                 customConfig.defaultCors
@@ -502,7 +503,7 @@ class ServerlessDefault {
 
   invalidateElements(
     elements: CloudFrontInvalidateConfig[]
-  ): Promise<any[]> | undefined {
+  ): Promise<any> | undefined {
     const cli = this.serverless.cli
 
     if (this.options.noDeploy) {
@@ -584,26 +585,31 @@ class ServerlessDefault {
 
   afterDeploy(): Promise<any[]> | undefined {
     const customConfig = this.serverless.service.custom || {}
-    const elementsToInvalidate = customConfig.cloudfrontInvalidate.filter(
-      (element: {
-        autoInvalidate?: boolean
-        distributionId?: string
-        distributionIdKey?: string
-      }) => {
-        if (element.autoInvalidate !== false) {
-          return true
-        }
+    if (!customConfig.cloudfrontInvalidate) {
+      this.serverless.cli.consoleLog(
+        "No CloudFront Invalidation configuration found."
+      )
+      return
+    }
 
-        this.serverless.cli.consoleLog(
-          `Will skip invalidation for the distributionId "${
-            element.distributionId || element.distributionIdKey
-          }" as autoInvalidate is set to false.`
-        )
-        return false
-      }
-    )
+    if (
+      !customConfig.cloudfrontInvalidate.distributionId &&
+      !customConfig.cloudfrontInvalidate.distributionIdKey
+    ) {
+      this.serverless.cli.consoleLog(
+        "No CloudFront Invalidation configuration found."
+      )
+      return
+    }
 
-    return this.invalidateElements(elementsToInvalidate)
+    if (!customConfig.cloudfrontInvalidate.autoInvalidate) {
+      this.serverless.cli.consoleLog(
+        "No CloudFront Invalidation items found. Will skip invalidation."
+      )
+      return
+    }
+
+    return this.invalidateElements([customConfig.cloudfrontInvalidate])
   }
 }
 
