@@ -582,7 +582,7 @@ class ServerlessDefault {
     return Promise.all(invalidationPromises)
   }
 
-  afterDeploy() {
+  afterDeploy(): void {
     const customConfig = this.serverless.service.custom || {}
     const elementsToInvalidate = customConfig.cloudfrontInvalidate.filter(
       (element: {
