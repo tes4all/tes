@@ -55,6 +55,54 @@ interface ServerlessOptions {
   [key: string]: any
 }
 
+// ------ S3 Bucket --------
+interface StackResource {
+  LogicalResourceId?: string
+  PhysicalResourceId?: string
+  [key: string]: any
+}
+
+interface BucketReference {
+  Ref: string
+}
+
+interface S3ListObjectsResponse {
+  Contents: { Key: string }[]
+  IsTruncated: boolean
+}
+
+interface AssetFile {
+  source: string
+  globs: string
+  defaultContentType?: string
+  headers?: Record<string, any>
+}
+
+interface AssetSet {
+  bucket: string | BucketReference
+  prefix?: string
+  empty?: boolean
+  acl?: string
+  files: AssetFile[]
+}
+
+interface S3Config {
+  targets: AssetSet[]
+  uploadConcurrency: number
+  resolveReferences?: boolean
+}
+
+/**
+ * Options for file globbing
+ */
+interface GlobOptions {
+  cwd?: string
+  nodir?: boolean
+  dot?: boolean
+}
+
+// ------------------------
+
 async function execCommand(command: string, args: string): Promise<string> {
   return await execSync(`${command} ${args}`).toString().trim()
 
@@ -80,19 +128,23 @@ class ServerlessDefault {
   private options: ServerlessOptions
   private stage: string
   private hooks: Record<string, () => void>
-  private provider: string
   private aws: any
+  private provider: any
+  private providerConfig: any
+  private custom: any
+  private commands: any
 
   constructor(serverless: ServerlessInstance, options: ServerlessOptions) {
     this.serverless = serverless
     this.options = options
     this.stage = this.options["stage"] || this.serverless.service.provider.stage
     this.serverless.service.provider.stage = this.options["stage"] || "dev"
-    this.provider = "aws"
-    this.aws = this.serverless.getProvider("aws")
+    this.provider = this.serverless.getProvider("aws")
+    this.custom = this.serverless.service.custom || {}
+    this.providerConfig = this.serverless.service.provider || {}
 
     this.hooks = {
-      initialize: () => this.init(),
+      initialize: this.init.bind(this),
       "after:deploy:deploy": this.afterDeploy.bind(this),
     }
   }
@@ -119,26 +171,25 @@ class ServerlessDefault {
   }
 
   setCustomConfig(): void {
-    const customConfig = this.serverless.service.custom || {}
-    customConfig.logLevel = { prod: "INFO", default: "DEBUG" }
-    //customConfig.tesBase = 'arn:aws:lambda:eu-central-1:495963541969:function:sls-tes-webhook-dev'
-    customConfig.basePath = { dev: "dev", prod: "" }
-    customConfig.provisionedConcurrency = { dev: 0, prod: 0 }
-    customConfig.lambdaInsights = { defaultLambdaInsights: true }
+    this.custom.logLevel = { prod: "INFO", default: "DEBUG" }
+    //this.custom.tesBase = 'arn:aws:lambda:eu-central-1:495963541969:function:sls-tes-webhook-dev'
+    this.custom.basePath = { dev: "dev", prod: "" }
+    this.custom.provisionedConcurrency = { dev: 0, prod: 0 }
+    this.custom.lambdaInsights = { defaultLambdaInsights: true }
 
-    if (customConfig.tes?.type === "frontend") {
-      const customerCode = customConfig.tes.customerCode
-      const customerName = customConfig.tes.customerName
-      const projectName = customConfig.tes.projectName
-      customConfig.s3bucket = `${customerCode}-${customerName}/${projectName}/${this.stage}`
+    if (this.custom.tes?.type === "frontend") {
+      const customerCode = this.custom.tes.customerCode
+      const customerName = this.custom.tes.customerName
+      const projectName = this.custom.tes.projectName
+      this.custom.s3bucket = `${customerCode}-${customerName}/${projectName}/${this.stage}`
 
-      customConfig.assets = {
+      this.custom.assets = {
         auto: true,
         targets: [
           {
             bucket: "frontend--websites",
             empty: true,
-            prefix: customConfig.s3bucket,
+            prefix: this.custom.s3bucket,
             files: [
               {
                 source: ".output/public/",
@@ -152,38 +203,38 @@ class ServerlessDefault {
         ],
       }
 
-      customConfig.certificate = {
+      this.custom.certificate = {
         dev: "arn:aws:acm:us-east-1:495963541969:certificate/5976467c-2761-4293-a0df-ed47f8c33b3b",
         test: "arn:aws:acm:us-east-1:495963541969:certificate/5976467c-2761-4293-a0df-ed47f8c33b3b",
         prod:
-          customConfig.tes.prod?.certificate ||
+          this.custom.tes.prod?.certificate ||
           "arn:aws:acm:us-east-1:495963541969:certificate/5976467c-2761-4293-a0df-ed47f8c33b3b",
       }
 
-      customConfig.aliases = {
+      this.custom.aliases = {
         dev: `dev-${customerCode}-${projectName}.4pd3v.com`,
         test: `test-${customerCode}-${projectName}.4pd3v.com`,
         prod:
-          customConfig.tes.prod?.alias ||
+          this.custom.tes.prod?.alias ||
           `live-${customerCode}-${projectName}.4pd3v.com`,
       }
 
-      customConfig.cloudfrontInvalidate = {
+      this.custom.cloudfrontInvalidate = {
         distributionIdKey: "CDNDistributionId",
         autoInvalidate: true,
         items: ["/*"],
       }
     } else {
-      if (customConfig.customDomain?.rest) {
-        const basePath = customConfig.basePath[this.stage]
-        customConfig.customDomain.rest.basePath = basePath
-        customConfig.customDomain.rest.createRoute53Record = true
-        customConfig.customDomain.rest.apiType = "http"
-        customConfig.customDomain.rest.endpointType = "edge"
-        customConfig.customDomain.rest.autoDomain = false
+      if (this.custom.customDomain?.rest) {
+        const basePath = this.custom.basePath[this.stage]
+        this.custom.customDomain.rest.basePath = basePath
+        this.custom.customDomain.rest.createRoute53Record = true
+        this.custom.customDomain.rest.apiType = "http"
+        this.custom.customDomain.rest.endpointType = "edge"
+        this.custom.customDomain.rest.autoDomain = false
       }
 
-      customConfig.defaultCors = {
+      this.custom.defaultCors = {
         origin: "*",
         headers: [
           "Content-Type",
@@ -200,7 +251,7 @@ class ServerlessDefault {
         ],
         allowCredentials: true,
       }
-      customConfig.pythonRequirements = {
+      this.custom.pythonRequirements = {
         layer: true,
         strip: true,
         slim: true,
@@ -216,33 +267,32 @@ class ServerlessDefault {
   }
 
   setProviderConfig(): void {
-    const providerConfig = this.serverless.service.provider || {}
     const inputConfig = this.serverless.configurationInput.provider
 
-    providerConfig.deploymentBucket = "kinayu--serverless-deployments"
-    providerConfig.deploymentBucketObject = {
+    this.providerConfig.deploymentBucket = "kinayu--serverless-deployments"
+    this.providerConfig.deploymentBucketObject = {
       name: "kinayu--serverless-deployments",
     }
     if (!inputConfig.runtime) {
-      providerConfig.runtime = "python3.13"
+      this.providerConfig.runtime = "python3.13"
     }
     if (!inputConfig.memorySize) {
-      providerConfig.memorySize = 1536
+      this.providerConfig.memorySize = 1536
     }
     if (!inputConfig.architecture) {
-      providerConfig.architecture = "arm64"
+      this.providerConfig.architecture = "arm64"
     }
     if (!inputConfig.timeout) {
-      providerConfig.timeout = 20
+      this.providerConfig.timeout = 20
     }
 
-    providerConfig.deploymentMethod = "direct"
-    providerConfig.versionFunctions = false
-    providerConfig.logRetentionInDays = 14
-    providerConfig.environment = providerConfig.environment || {}
-    providerConfig.environment.stage = this.options.stage || "dev"
-    providerConfig.environment.LOGLEVEL = "DEBUG"
-    providerConfig.apiGateway = {
+    this.providerConfig.deploymentMethod = "direct"
+    this.providerConfig.versionFunctions = false
+    this.providerConfig.logRetentionInDays = 14
+    this.providerConfig.environment = this.providerConfig.environment || {}
+    this.providerConfig.environment.stage = this.options.stage || "dev"
+    this.providerConfig.environment.LOGLEVEL = "DEBUG"
+    this.providerConfig.apiGateway = {
       apiKeySourceType: "HEADER",
       minimumCompressionSize: 1024,
     }
@@ -257,22 +307,13 @@ class ServerlessDefault {
         Resource: "*",
       },
     ]
-
-    /*
-
-    providerConfig.layers = providerConfig.layers || []
-    providerConfig.layers.push({
-      "!Ref": "PythonRequirementsLambdaLayer",
-    })
-      */
   }
 
   setPackageConfig(): void {
     const packageConfig = this.serverless.service.package || {}
-    const customConfig = this.serverless.service.custom || {}
 
     packageConfig.excludeDevDependencies = true
-    if (customConfig.tes?.type === "frontend") {
+    if (this.custom.tes?.type === "frontend") {
       packageConfig.patterns = ["!**", ".output/server/**"]
     } else {
       packageConfig.patterns = [
@@ -292,14 +333,14 @@ class ServerlessDefault {
   }
 
   setFunctionDefaults(): void {
+    this.serverless.service.functions = this.serverless.service.functions || {}
     const functionConfig = this.serverless.service.functions
-    const customConfig = this.serverless.service.custom
-    if (!customConfig) {
+    if (!this.custom) {
       throw new Error("Custom config not set")
     }
 
-    if (customConfig.tes?.type === "frontend") {
-      functionConfig["cfOriginRequest"] = {
+    if (this.custom.tes?.type === "frontend") {
+      functionConfig.cfOriginRequest = {
         handler: ".output/server/index.handler",
         name: `${this.serverless.service.service}-${this.stage}-cfOriginRequest`,
         events: [
@@ -327,13 +368,13 @@ class ServerlessDefault {
           for (const key in functionConfig[functionName].events[event]) {
             if (key === "http" || key === "httpApi") {
               functionConfig[functionName].events[event][key].cors =
-                customConfig.defaultCors
+                this.custom.defaultCors
             }
           }
         }
         /*
         const provisionedConcurrency =
-          customConfig.provisionedConcurrency[this.stage] || 0
+          this.custom.provisionedConcurrency[this.stage] || 0
         functionConfig[functionName].provisionedConcurrency =
           provisionedConcurrency
           */
@@ -347,22 +388,28 @@ class ServerlessDefault {
   }
 
   setResources(): void {
-    const customConfig = this.serverless.service.custom || {}
+    // Initialize resources structure if it doesn't exist
+    this.serverless.service.resources = this.serverless.service.resources || {}
+    this.serverless.service.resources.Resources =
+      this.serverless.service.resources.Resources || {}
+    this.serverless.service.resources.Outputs =
+      this.serverless.service.resources.Outputs || {}
+
     const resourcesConfig = this.serverless.service.resources || {}
 
-    if (customConfig.tes?.type === "frontend") {
+    if (this.custom.tes?.type === "frontend") {
       resourcesConfig.Resources = resourcesConfig.Resources || {}
       ;(resourcesConfig.Resources.CloudFrontDistribution = {
         Type: "AWS::CloudFront::Distribution",
         Properties: {
           DistributionConfig: {
-            Aliases: [customConfig.aliases[this.stage]],
+            Aliases: [this.custom.aliases[this.stage]],
             Origins: [
               {
                 Id: "static",
                 DomainName:
                   "frontend--websites.s3-website.eu-central-1.amazonaws.com",
-                OriginPath: `/${customConfig.s3bucket}`,
+                OriginPath: `/${this.custom.s3bucket}`,
                 ConnectionAttempts: 3,
                 ConnectionTimeout: 10,
                 CustomOriginConfig: {
@@ -377,7 +424,7 @@ class ServerlessDefault {
                   "Fn::Sub":
                     "${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com",
                 },
-                OriginPath: `/${customConfig.basePath[this.stage]}`,
+                OriginPath: `/${this.stage}`,
                 CustomOriginConfig: {
                   HTTPSPort: 443,
                   OriginProtocolPolicy: "https-only",
@@ -435,11 +482,11 @@ class ServerlessDefault {
                 ResponsePagePath: "/404",
               },
             ],
-            Comment: customConfig.s3bucket,
+            Comment: this.custom.s3bucket,
             PriceClass: "PriceClass_100",
             Enabled: true,
             ViewerCertificate: {
-              AcmCertificateArn: customConfig.certificate[this.stage],
+              AcmCertificateArn: this.custom.certificate[this.stage],
               SslSupportMethod: "sni-only",
               MinimumProtocolVersion: "TLSv1.2_2021",
             },
@@ -486,20 +533,22 @@ class ServerlessDefault {
         },
       },
     }
-    return this.aws.request("CloudFront", "createInvalidation", params).then(
-      () => {
-        cli.consoleLog(
-          `CloudfrontInvalidate: ${this.colorYellow("Invalidation started")}`
-        )
-      },
-      (err: any) => {
-        cli.consoleLog(JSON.stringify(err))
-        cli.consoleLog(
-          `CloudfrontInvalidate: ${this.colorYellow("Invalidation failed")}`
-        )
-        throw err
-      }
-    )
+    return this.provider
+      .request("CloudFront", "createInvalidation", params)
+      .then(
+        () => {
+          cli.consoleLog(
+            `CloudfrontInvalidate: ${this.colorYellow("Invalidation started")}`
+          )
+        },
+        (err: any) => {
+          cli.consoleLog(JSON.stringify(err))
+          cli.consoleLog(
+            `CloudfrontInvalidate: ${this.colorYellow("Invalidation failed")}`
+          )
+          throw err
+        }
+      )
   }
 
   invalidateElements(
@@ -549,7 +598,7 @@ class ServerlessDefault {
       // get the id from the output of stack.
       const stackName = this.serverless.getProvider("aws").naming.getStackName()
 
-      return this.aws
+      return this.provider
         .request("CloudFormation", "describeStacks", { StackName: stackName })
         .then(
           (result: {
@@ -585,8 +634,7 @@ class ServerlessDefault {
   }
 
   afterDeploy(): Promise<any[]> | undefined {
-    const customConfig = this.serverless.service.custom || {}
-    if (!customConfig.cloudfrontInvalidate) {
+    if (!this.custom.cloudfrontInvalidate) {
       this.serverless.cli.consoleLog(
         "No CloudFront Invalidation configuration found."
       )
@@ -594,8 +642,8 @@ class ServerlessDefault {
     }
 
     if (
-      !customConfig.cloudfrontInvalidate.distributionId &&
-      !customConfig.cloudfrontInvalidate.distributionIdKey
+      !this.custom.cloudfrontInvalidate.distributionId &&
+      !this.custom.cloudfrontInvalidate.distributionIdKey
     ) {
       this.serverless.cli.consoleLog(
         "No CloudFront Invalidation configuration found."
@@ -603,15 +651,269 @@ class ServerlessDefault {
       return
     }
 
-    if (!customConfig.cloudfrontInvalidate.autoInvalidate) {
+    if (!this.custom.cloudfrontInvalidate.autoInvalidate) {
       this.serverless.cli.consoleLog(
         "No CloudFront Invalidation items found. Will skip invalidation."
       )
       return
     }
 
-    return this.invalidateElements([customConfig.cloudfrontInvalidate])
+    return this.invalidateElements([this.custom.cloudfrontInvalidate])
   }
+
+  /*
+
+  // Helper for sequential processing
+  async processSequentially<T, U>(
+    items: T[],
+    fn: (item: T) => Promise<U>
+  ): Promise<U[]> {
+    const results: U[] = []
+    for (const item of items) {
+      const result = await fn(item)
+      results.push(result)
+    }
+    return results
+  }
+
+  // Match a single glob pattern against a path
+  matchPattern(pattern: string, filepath: string): boolean {
+    // Convert glob pattern to regex
+    const regex = new RegExp(
+      `^${pattern
+        .split("*")
+        .map((s) => s.replace(/[-\/\\^$+?.()|[\]{}]/g, "\\$&"))
+        .join(".*")}$`
+    )
+    return regex.test(filepath)
+  }
+
+  // Find files matching glob patterns without external dependencies
+  findFiles(pattern: string, options: GlobOptions = {}): string[] {
+    const cwd = options.cwd || process.cwd()
+    const results: string[] = []
+
+    // Simple glob pattern matching - handles * and directory recursion
+    if (pattern.includes("**")) {
+      // Handle recursive pattern
+      this.traverseDirectory(cwd, "", results, options)
+
+      // Filter results by pattern
+      const patternParts = pattern.split("**")
+      return results.filter((file) => {
+        if (patternParts.length === 2) {
+          return (
+            file.startsWith(patternParts[0]) && file.endsWith(patternParts[1])
+          )
+        }
+        return this.matchPattern(pattern, file)
+      })
+    } else if (pattern.includes("*")) {
+      // Handle simple wildcard pattern
+      this.traverseDirectory(cwd, "", results, options)
+      return results.filter((file) => this.matchPattern(pattern, file))
+    } else {
+      // Direct file or directory
+      this.traverseDirectory(cwd, "", results, options)
+      return results.filter((file) => file === pattern)
+    }
+  }
+
+  //Recursively traverse directory and collect files
+  traverseDirectory(
+    basePath: string,
+    relativePath: string,
+    results: string[],
+    options: GlobOptions
+  ): void {
+    const currentPath = path.join(basePath, relativePath)
+    const entries = fs.readdirSync(currentPath, { withFileTypes: true })
+
+    for (const entry of entries) {
+      // Skip hidden files if not including dot files
+      if (!options.dot && entry.name.startsWith(".")) {
+        continue
+      }
+
+      const entryRelativePath = path.join(relativePath, entry.name)
+
+      if (entry.isDirectory()) {
+        // If directory, traverse recursively
+        this.traverseDirectory(basePath, entryRelativePath, results, options)
+
+        // Add directory to results if not filtering directories
+        if (!options.nodir) {
+          results.push(entryRelativePath)
+        }
+      } else if (entry.isFile()) {
+        // Add file to results
+        results.push(entryRelativePath)
+      }
+    }
+  }
+
+  // Then in your class, update these methods:
+
+  listStackResources(
+    resources: StackResource[] = [],
+    nextToken?: string
+  ): Promise<StackResource[]> {
+    if (!this.custom.assets.resolveReferences) {
+      return Promise.resolve(resources)
+    }
+
+    return this.provider
+      .request("CloudFormation", "listStackResources", {
+        StackName: this.provider.naming.getStackName(),
+        NextToken: nextToken,
+      })
+      .then(
+        (response: {
+          StackResourceSummaries: StackResource[]
+          NextToken?: string
+        }) => {
+          resources.push(...response.StackResourceSummaries)
+          if (response.NextToken) {
+            // Query next page
+            return this.listStackResources(resources, response.NextToken)
+          }
+        }
+      )
+      .then(() => {
+        return resources
+      })
+  }
+
+  resolveBucket(
+    resources: StackResource[],
+    value: string | BucketReference
+  ): Promise<string> {
+    if (typeof value === "string") {
+      return Promise.resolve(value)
+    } else if (value && value.Ref) {
+      let resolved: string | undefined
+      resources.forEach((resource) => {
+        if (resource && resource.LogicalResourceId === value.Ref) {
+          resolved = resource.PhysicalResourceId
+        }
+      })
+
+      if (!resolved) {
+        this.serverless.cli.log(
+          `WARNING: Failed to resolve reference ${value.Ref}`
+        )
+      }
+      return Promise.resolve(resolved as string)
+    } else {
+      return Promise.reject(new Error(`Invalid bucket name ${value}`))
+    }
+  }
+
+  emptyBucket(bucket: string, dir: string): Promise<void> {
+    const listParams = {
+      Bucket: bucket,
+      Prefix: dir,
+    }
+
+    return this.provider
+      .request("S3", "listObjectsV2", listParams)
+      .then((listedObjects: S3ListObjectsResponse) => {
+        if (listedObjects.Contents.length === 0) return
+
+        const deleteParams = {
+          Bucket: bucket,
+          Delete: { Objects: [] as { Key: string }[] },
+        }
+
+        listedObjects.Contents.forEach(({ Key }) => {
+          deleteParams.Delete.Objects.push({ Key })
+        })
+
+        return this.provider
+          .request("S3", "deleteObjects", deleteParams)
+          .then(() => {
+            if (listedObjects.IsTruncated) {
+              this.log("Is not finished. Rerun emptyBucket")
+              return this.emptyBucket(bucket, dir)
+            }
+          })
+      })
+  }
+
+  deployS3(): Promise<any> {
+    const assetSets = this.custom.assets.targets
+    const uploadConcurrency = this.custom.assets.uploadConcurrency
+
+    // Read existing stack resources so we can resolve references if necessary
+    return this.listStackResources().then((resources) => {
+      // Process asset sets in parallel (up to uploadConcurrency)
+      return this.mapWithConcurrency(
+        assetSets,
+        async (assets: AssetSet) => {
+          const prefix = assets.prefix || ""
+          // Try to resolve the bucket name
+          const bucket = await this.resolveBucket(resources, assets.bucket)
+
+          if (this.options.bucket && this.options.bucket !== bucket) {
+            this.log(`Skipping bucket: ${bucket}`)
+            return ""
+          }
+
+          if (assets.empty) {
+            this.log(`Emptying bucket: ${bucket}`)
+            await this.emptyBucket(bucket, prefix)
+          }
+
+          if (!bucket) {
+            return
+          }
+
+          // Process files serially to not overload the network
+          return this.processSequentially(
+            assets.files,
+            async (opt: AssetFile) => {
+              this.log(`Sync bucket: ${bucket}:${prefix}`)
+              this.log(`Path: ${opt.source}`)
+
+              const cfg = { nodir: true, cwd: opt.source }
+              const filenames = this.findFiles(opt.globs, cfg)
+              return this.processSequentially(
+                filenames,
+                async (filename: string) => {
+                  const body = fs.readFileSync(path.join(opt.source, filename))
+                  const type =
+                    mime.lookup(filename) ||
+                    opt.defaultContentType ||
+                    "application/octet-stream"
+
+                  this.log(`\tFile:  ${filename} (${type})`)
+
+                  // when using windows path join resolves to backslashes, but s3 is expecting a slash
+                  // therefore replace all backslashes with slashes
+                  const key = path.join(prefix, filename).replace(/\\/g, "/")
+
+                  const details = Object.assign(
+                    {
+                      ACL: assets.acl || "private",
+                      Body: body,
+                      Bucket: bucket,
+                      Key: key,
+                      ContentType: type,
+                    },
+                    opt.headers || {}
+                  )
+
+                  return this.provider.request("S3", "putObject", details)
+                }
+              )
+            }
+          )
+        },
+        uploadConcurrency
+      )
+    })
+  }
+  */
 }
 
 // Deno-kompatibler Export

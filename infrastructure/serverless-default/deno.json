@@ -2,5 +2,8 @@
   "name": "@tes/serverless-default",
   "version": "0.3.1",
   "license": "MIT",
-  "exports": "./serverless-default.ts"
+  "exports": "./serverless-default.ts",
+  "imports": {
+    "mime-types": "npm:mime-types@^3.0.1"
+  }
 }
