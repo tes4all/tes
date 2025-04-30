@@ -14,13 +14,25 @@ def shopify(ctx):
     pass
 
 
+@cli.group()
+@click.pass_context
+def git(ctx):
+    "Commands related to Git."
+    pass
+
+
 # Load plugins dynamically
 def load_plugins():
     try:
-        from plugins import shopify_theme, shopify_printess  # Importing plugin modules
+        from plugins import (
+            shopify_theme,
+            shopify_printess,
+            git_tools,
+        )  # Importing plugin modules
 
         shopify.add_command(shopify_theme.theme)
         shopify.add_command(shopify_printess.printess)
+        git.add_command(git_tools.tools)
     except ImportError as e:
         click.echo(f"Error loading plugins: {e}")
 
