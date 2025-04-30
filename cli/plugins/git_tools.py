@@ -35,7 +35,7 @@ def status(ctx, dir, show_has_no_changes):
     if not repos:
         click.echo("No repos found.")
         return
-    print(f"{len(repos)} Repos Found... checking status...")
+    click.echo(f"{len(repos)} Repos Found... checking status...")
 
     # Process repos in parallel with max 20 workers
     results = []
@@ -58,7 +58,7 @@ def status(ctx, dir, show_has_no_changes):
                     click.echo(f"❌ {repo_name}: Error - {result['error']}")
                 elif result.get("has_changes", False):
                     click.echo(
-                        f"⚠️ {repo_name} ({result['branch']}): Has uncommitted changes"
+                        f"⚠️ {repo_name} ({result['branch']}): Has uncommitted changes. Path: - {repo}"
                     )
                 elif not result.get("has_changes", False) and show_has_no_changes:
                     click.echo(f"✅ {repo_name} ({result['branch']}): Clean")
@@ -89,28 +89,22 @@ def check_git_status(repo_path):
         # Get repo name for display
         repo_name = os.path.basename(repo_path)
 
-        # Change to repo directory
-        current_dir = os.getcwd()
-        os.chdir(repo_path)
-
         # Get git status
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             capture_output=True,
             text=True,
             check=False,
+            cwd=repo_path,
         )
-
         # Get current branch
         branch_result = subprocess.run(
             ["git", "branch", "--show-current"],
             capture_output=True,
             text=True,
             check=False,
+            cwd=repo_path,
         )
-
-        # Return to original directory
-        os.chdir(current_dir)
 
         changes = result.stdout.strip()
         branch = branch_result.stdout.strip()
