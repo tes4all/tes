@@ -24,15 +24,14 @@ def tools(ctx):
 )
 def status(ctx, dir, show_has_no_changes):
     """Check the output of all repos in the working directory."""
-    init_path = os.getcwd()  # Save initial directory
-    # os.chdir(working_dir)  # Change to the base directory
+
     working_dir = os.path.expanduser(dir)
     if not os.path.isdir(working_dir):
         click.echo(f"'{working_dir}' does not exist or is not a directory.")
         return
 
     repos = get_repos(working_dir)
-    # os.chdir(init_path)  # Return to initial directory
+
     if not repos:
         click.echo("No repos found.")
         return
