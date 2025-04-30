@@ -18,7 +18,7 @@ def printess(ctx):
 def update(ctx):
     """Update the Shopify theme."""
 
-    printess_gist_url = "git@gist.github.com:eaf528a693e44b4d7c1efde7fa50d8dd.git"
+    printess_gist_url = "git@github.com:PrintessEditor/Printess-Shopify-Plugin.git"
     # rm dir if exists
     if os.path.exists("printess_temp"):
         shutil.rmtree("printess_temp")
