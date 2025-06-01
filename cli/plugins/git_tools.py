@@ -80,8 +80,6 @@ def status(ctx, dir, show_has_no_changes):
     click.echo(f"❌ Repos with errors: {error_count}")
     click.echo("Done.")
 
-    # click.echo("Done.")
-
 
 def check_git_status(repo_path):
     """Check git status for a single repository."""
@@ -139,3 +137,84 @@ def get_repos(base_path):
             if os.path.exists(os.path.join(repo_path, ".git")):
                 repos.append(repo_path)
     return repos
+
+
+@tools.command()
+@click.pass_context
+@click.option(
+    "--dir", required=False, default=".", help="Base directory to search for repos."
+)
+def update(ctx, dir):
+    """Update all repos in the working directory."""
+    working_dir = os.path.expanduser(dir)
+    if not os.path.isdir(working_dir):
+        click.echo(f"'{working_dir}' does not exist or is not a directory.")
+        return
+
+    repos = get_repos(working_dir)
+
+    if not repos:
+        click.echo("No repos found.")
+        return
+    click.echo(f"{len(repos)} Repos Found... fetch updates...")
+
+    # Process repos in parallel with max 20 workers
+    results = []
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        # Submit all tasks
+        future_to_repo = {
+            executor.submit(update_git_repo, repo): repo for repo in repos
+        }
+
+        # Process results as they complete
+        for future in as_completed(future_to_repo):
+            repo = future_to_repo[future]
+            try:
+                result = future.result()
+                results.append(result)
+                print("result:", result)
+
+                # Display immediate feedback
+                repo_name = result.get("repo", os.path.basename(repo))
+            except Exception as e:
+                click.echo(f"❌ {os.path.basename(repo)}: Error - {str(e)}")
+
+    click.echo("Done.")
+
+
+
+def update_git_repo(repo_path):
+    """Update git single repository."""
+    try:
+        # Get repo name for display
+        repo_name = os.path.basename(repo_path)
+
+        # Get git status
+        result = subprocess.run(
+            ["git", "pull", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_path,
+        )
+        # Get current branch
+        branch_result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=repo_path,
+        )
+
+        changes = result.stdout.strip()
+        branch = branch_result.stdout.strip()
+
+        return {
+            "repo": repo_name,
+            "path": repo_path,
+            "branch": branch,
+            "has_changes": len(changes) > 0,
+            "changes": changes,
+        }
+    except Exception as e:
+        return {"repo": os.path.basename(repo_path), "path": repo_path, "error": str(e)}
