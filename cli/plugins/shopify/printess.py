@@ -3,7 +3,11 @@ import shutil
 from concurrent.futures import ThreadPoolExecutor
 import click
 import requests
-from cli.plugins import utils
+
+try:
+    from .. import utils
+except ImportError:
+    from cli.plugins import utils
 
 
 @click.group()

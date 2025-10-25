@@ -24,15 +24,22 @@ def git(ctx):
 # Load plugins dynamically
 def load_plugins():
     try:
-        from cli.plugins import (
-            shopify_theme,
-            shopify_printess,
-            git_tools,
-        )  # Importing plugin modules
+        # Try relative imports first (when installed as package)
+        try:
+            from .plugins.git import status, update
+            from .plugins.shopify import theme, printess
+        except ImportError:
+            # Fall back to absolute imports (when run as script)
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from cli.plugins.git import status, update
+            from cli.plugins.shopify import theme, printess
 
-        shopify.add_command(shopify_theme.theme)
-        shopify.add_command(shopify_printess.printess)
-        git.add_command(git_tools.tools)
+        shopify.add_command(theme)
+        shopify.add_command(printess)
+        git.add_command(status)
+        git.add_command(update)
     except ImportError as e:
         click.echo(f"Error loading plugins: {e}")
 

@@ -4,14 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import click
 
 
-@click.group()
-@click.pass_context
-def tools(ctx):
-    """Commands for managing Shopify themes."""
-    pass
-
-
-@tools.command()
+@click.command()
 @click.pass_context
 @click.option(
     "--dir", required=False, default=".", help="Base directory to search for repos."
@@ -139,7 +132,7 @@ def get_repos(base_path):
     return repos
 
 
-@tools.command()
+@click.command()
 @click.pass_context
 @click.option(
     "--dir", required=False, default=".", help="Base directory to search for repos."
