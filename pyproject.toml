@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tes-cli"
+version = "1.0.0"
+description = "TES CLI - Tools"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "tes4all"}
+]
+dependencies = [
+    "click>=8.0.0",
+    "pyyaml>=6.0.0",
+    "requests>=2.28.0",
+]
+
+[project.scripts]
+tes = "cli.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/tes4all/tes"
+Repository = "https://github.com/tes4all/tes"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cli"]

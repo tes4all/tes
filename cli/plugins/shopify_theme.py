@@ -3,7 +3,7 @@ import shutil
 import subprocess
 import json
 import click
-from . import utils
+from cli.plugins import utils
 
 
 @click.group()

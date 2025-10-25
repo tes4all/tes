@@ -24,7 +24,7 @@ def git(ctx):
 # Load plugins dynamically
 def load_plugins():
     try:
-        from plugins import (
+        from cli.plugins import (
             shopify_theme,
             shopify_printess,
             git_tools,
@@ -37,8 +37,11 @@ def load_plugins():
         click.echo(f"Error loading plugins: {e}")
 
 
-# cli = TES_CLI()
-
-if __name__ == "__main__":
+def main():
+    """Entry point for the CLI."""
     load_plugins()
     cli()
+
+
+if __name__ == "__main__":
+    main()
