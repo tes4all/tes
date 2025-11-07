@@ -12,7 +12,7 @@ except ImportError:
     from cli.plugins import utils
 
 
-APP_NAME = "jep-project-vault"
+APP_NAME = "jep-projectvault"
 TEMP_DIR = "project_vault_temp"
 INTEGRATION_BASE_PATH = os.path.join("integrations", "printess", "shopify")
 
