@@ -50,26 +50,3 @@ def update(ctx):
     # remove temp folder
     shutil.rmtree("printess_temp")
     click.echo("Shopify printess updated!")
-
-
-def _download_file(file_path, url):
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    response = requests.get(url, stream=True)
-    if response.status_code == 200:
-        with open(file_path, "wb") as file:
-            for chunk in response.iter_content(chunk_size=8192):
-                file.write(chunk)
-        print(f"Downloaded: {file_path}")
-    else:
-        print(f"Failed to download {file_path}: {response.status_code}")
-
-
-# Parallel download using ThreadPoolExecutor
-def _download_files_in_parallel(files):
-    with ThreadPoolExecutor() as executor:
-        futures = [
-            executor.submit(_download_file, file_path, url)
-            for file_path, url in files.items()
-        ]
-        for future in futures:
-            future.result()
