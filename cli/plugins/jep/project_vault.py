@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import shutil
 from concurrent.futures import ThreadPoolExecutor
 import click
@@ -76,23 +77,27 @@ def update(ctx):
         if file["action"] == "replace":
             shutil.move(source, destination)
         elif file["action"] == "after_body_open":
-            # read source content
+            # inject snippet immediately after the opening <body> tag or replace existing markers
             with open(source, "r") as sf:
-                source_content = sf.read()
-            # read destination content
+                source_content = sf.read().rstrip()
             with open(destination, "r") as df:
                 dest_content = df.read()
-            # replace content from {% comment %}$TES-jep-project-vault-start${% endcomment %} to {% comment %}$TES-jep-project-vault-end${% endcomment %} in dest_content
+
             start_marker = "{% comment %}$TES-" + APP_NAME + "-start${% endcomment %}"
             end_marker = "{% comment %}$TES-" + APP_NAME + "-end${% endcomment %}"
+            snippet_block = f"{start_marker}\n{source_content}\n{end_marker}"
 
             if start_marker in dest_content and end_marker in dest_content:
-                start_idx = dest_content.find(start_marker)
-                end_idx = dest_content.find(end_marker) + len(end_marker)
-                new_content = dest_content[:start_idx] + "" + dest_content[end_idx:]
+                # replace the existing block to avoid duplicate insertions
+                pattern = re.compile(re.escape(start_marker) + r".*?" + re.escape(end_marker), re.DOTALL)
+                new_content = pattern.sub(snippet_block, dest_content, count=1)
+            else:
+                body_match = re.search(r"<body[^>]*>", dest_content, flags=re.IGNORECASE)
+                if not body_match:
+                    raise click.ClickException("theme.liquid is missing a <body> tag to inject the Project Vault snippet.")
+                insertion_point = body_match.end()
+                new_content = dest_content[:insertion_point] + "\n" + snippet_block + dest_content[insertion_point:]
 
-            new_content = dest_content.replace("<body>", "<body>\n" + start_marker + "\n" + source_content + "\n" + end_marker)
-            # write back to destination
             with open(destination, "w") as df:
                 df.write(new_content)
 
