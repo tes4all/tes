@@ -63,8 +63,7 @@ def update(ctx):
 
 """
     instructions_path = os.path.join(TEMP_DIR, INTEGRATION_BASE_PATH, "instructions.json")
-    with open(instructions_path, "r") as f:
-        instructions = json.load(f)
+    instructions = _load_json_file(instructions_path)
 
     # handle files
     files_to_download = instructions.get("files", {})
@@ -116,10 +115,8 @@ def _set_schema_in_settings():
     if not os.path.exists(shopify_settings_schema_path):
         return True
 
-    with open(integration_config_file, "r") as scf:
-        integration_config = json.load(scf)
-    with open(shopify_settings_schema_path, "r") as scf:
-        shopify_settings_schema = json.load(scf)
+    integration_config = _load_json_file(integration_config_file)
+    shopify_settings_schema = _load_json_file(shopify_settings_schema_path)
 
     has_changes = False
     for schema_name in integration_config.get("settings", {}).get("schema", []):
@@ -145,4 +142,56 @@ def _set_schema_in_settings():
     with open(shopify_settings_schema_path, "w") as ssf:
         json.dump(shopify_settings_schema, ssf, indent=2)
     return True
+
+
+def _load_json_file(file_path):
+    """Load JSON while tolerating trailing commas in arrays/objects."""
+    with open(file_path, "r") as handle:
+        raw_content = handle.read()
+    try:
+        return json.loads(raw_content)
+    except json.JSONDecodeError as exc:
+        sanitized = _strip_trailing_commas(raw_content)
+        if sanitized != raw_content:
+            try:
+                return json.loads(sanitized)
+            except json.JSONDecodeError as sanitized_exc:
+                raise click.ClickException(f"Invalid JSON in {file_path}: {sanitized_exc}") from sanitized_exc
+        raise click.ClickException(f"Invalid JSON in {file_path}: {exc}") from exc
+
+
+def _strip_trailing_commas(payload):
+    """Remove trailing commas before closing braces/brackets outside strings."""
+    result = []
+    in_string = False
+    escape = False
+
+    for char in payload:
+        if in_string:
+            result.append(char)
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+            result.append(char)
+            continue
+
+        if char in (']', '}'):
+            idx = len(result) - 1
+            # walk back over whitespace to find a potential trailing comma
+            while idx >= 0 and result[idx].isspace():
+                idx -= 1
+            if idx >= 0 and result[idx] == ',':
+                # drop the comma and any whitespace after it that we already added
+                while len(result) - 1 >= idx:
+                    result.pop()
+        result.append(char)
+
+    return ''.join(result)
 
