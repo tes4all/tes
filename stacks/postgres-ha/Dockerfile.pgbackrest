@@ -1,0 +1,30 @@
+FROM postgres:16.1-alpine
+
+# Install pgbackrest and dependencies
+RUN apk add --no-cache \
+    pgbackrest \
+    postgresql16-client \
+    bash \
+    ca-certificates
+
+# Create non-root user
+RUN addgroup -g 1001 pgbackrest && \
+    adduser -D -u 1001 -G pgbackrest pgbackrest && \
+    mkdir -p /var/lib/pgbackrest /var/log/pgbackrest /var/spool/pgbackrest && \
+    chown -R pgbackrest:pgbackrest /var/lib/pgbackrest /var/log/pgbackrest /var/spool/pgbackrest
+
+# Copy configuration
+COPY config/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf
+
+# Set working directory
+WORKDIR /home/pgbackrest
+
+# Switch to non-root user
+USER 1001:1001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD pgbackrest info || exit 1
+
+# Default command runs backup scheduler
+CMD ["sh", "-c", "while true; do pgbackrest --stanza=postgres-cluster backup --type=incr; sleep 3600; done"]
