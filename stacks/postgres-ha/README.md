@@ -95,7 +95,8 @@ Production-ready PostgreSQL High Availability cluster using Patroni, etcd, and p
 # Navigate to the stack directory
 cd stacks/postgres-ha
 
-# Build and start all services
+# Build images and start all services
+docker compose build
 docker compose up -d
 
 # Wait for cluster initialization (takes 60-90 seconds)
@@ -134,6 +135,7 @@ Run the automated verification script:
 ```
 
 This script will:
+- Build Docker images for the stack
 - Start the entire stack
 - Wait for services to become healthy
 - Test database connectivity

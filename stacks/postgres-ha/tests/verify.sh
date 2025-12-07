@@ -183,7 +183,10 @@ check_ssl() {
 main() {
     cd "$STACK_DIR"
     
-    echo "Starting Postgres HA stack..."
+    echo "Building Docker images..."
+    docker compose build
+    
+    echo -e "\nStarting Postgres HA stack..."
     docker compose up -d
     
     echo -e "\n${YELLOW}Waiting for services to initialize...${NC}"
