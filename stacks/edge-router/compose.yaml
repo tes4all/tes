@@ -1,0 +1,72 @@
+version: '3.8'
+
+networks:
+  edge_network:
+    driver: overlay
+    attachable: true
+
+services:
+  haproxy:
+    build:
+      context: .
+      dockerfile: Dockerfile.haproxy
+    image: golden/haproxy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8404:8404"
+    networks:
+      - edge_network
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "prometheus.scrape=true"
+        - "prometheus.port=8404"
+        - "prometheus.path=/metrics"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8404"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  traefik:
+    build:
+      context: .
+      dockerfile: Dockerfile.traefik
+    image: golden/traefik:v2.10
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - edge_network
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "prometheus.scrape=true"
+        - "prometheus.port=8082"
+        - "prometheus.path=/metrics"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

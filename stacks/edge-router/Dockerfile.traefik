@@ -1,0 +1,15 @@
+FROM traefik:v2.10
+
+RUN addgroup -g 1000 traefik-user && \
+    adduser -D -u 1000 -G traefik-user traefik-user
+
+COPY config/traefik.yml /etc/traefik/traefik.yml
+
+RUN chown -R traefik-user:traefik-user /etc/traefik
+
+USER 1000
+
+EXPOSE 80 443 8082
+
+ENTRYPOINT ["/usr/local/bin/traefik"]
+CMD ["--configFile=/etc/traefik/traefik.yml"]

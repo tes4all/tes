@@ -1,0 +1,51 @@
+version: '3.8'
+
+networks:
+  edge_network:
+    external: true
+  postgres_network:
+    external: true
+
+secrets:
+  zitadel_masterkey:
+    external: true
+
+services:
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:v2.41.3
+    command: 'start-from-init --masterkey $(cat /run/secrets/zitadel_masterkey) --tlsMode external --config /config/zitadel.yaml'
+    environment:
+      - ZITADEL_DATABASE_POSTGRES_HOST=postgres-ha_haproxy
+      - ZITADEL_DATABASE_POSTGRES_PORT=5432
+      - ZITADEL_DATABASE_POSTGRES_DATABASE=zitadel
+      - ZITADEL_DATABASE_POSTGRES_USER_USERNAME=zitadel
+      - ZITADEL_DATABASE_POSTGRES_USER_PASSWORD_FILE=/run/secrets/zitadel_masterkey
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME=postgres
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD_FILE=/run/secrets/zitadel_masterkey
+    secrets:
+      - zitadel_masterkey
+    volumes:
+      - ./config/zitadel.yaml:/config/zitadel.yaml:ro
+    networks:
+      - edge_network
+      - postgres_network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.zitadel.rule=Host(`auth.example.com`)"
+        - "traefik.http.routers.zitadel.entrypoints=websecure"
+        - "traefik.http.routers.zitadel.tls=true"
+        - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
+        - "prometheus.scrape=true"
+        - "prometheus.port=9090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/debug/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

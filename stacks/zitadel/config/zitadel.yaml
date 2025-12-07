@@ -1,0 +1,46 @@
+Log:
+  Level: info
+  Format: json
+
+ExternalSecure: true
+ExternalDomain: auth.example.com
+ExternalPort: 443
+
+Database:
+  postgres:
+    Host: postgres-ha_haproxy
+    Port: 5432
+    Database: zitadel
+    MaxOpenConns: 25
+    MaxIdleConns: 10
+    MaxConnLifetime: 1h
+    MaxConnIdleTime: 5m
+    User:
+      Username: zitadel
+      SSL:
+        Mode: disable
+    Admin:
+      Username: postgres
+      SSL:
+        Mode: disable
+
+Tracing:
+  Type: none
+
+Metrics:
+  Type: prometheus
+
+FirstInstance:
+  Org:
+    Name: ZITADEL
+  
+Machine:
+  Identification:
+    Hostname:
+      Enabled: true
+    Webhook:
+      Enabled: false
+
+SystemDefaults:
+  SecretGenerators:
+    PasswordSaltCost: 14

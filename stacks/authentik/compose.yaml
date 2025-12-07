@@ -1,0 +1,115 @@
+version: '3.8'
+
+networks:
+  edge_network:
+    external: true
+  postgres_network:
+    external: true
+
+volumes:
+  authentik_media:
+  authentik_templates:
+  authentik_certs:
+  authentik_redis:
+
+secrets:
+  authentik_secret_key:
+    external: true
+  postgres_password:
+    external: true
+
+services:
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2023.10.4
+    command: server
+    environment:
+      - AUTHENTIK_REDIS__HOST=authentik-redis
+      - AUTHENTIK_POSTGRESQL__HOST=postgres-ha_haproxy
+      - AUTHENTIK_POSTGRESQL__PORT=5432
+      - AUTHENTIK_POSTGRESQL__NAME=authentik
+      - AUTHENTIK_POSTGRESQL__USER=authentik
+      - AUTHENTIK_POSTGRESQL__PASSWORD_FILE=/run/secrets/postgres_password
+      - AUTHENTIK_SECRET_KEY_FILE=/run/secrets/authentik_secret_key
+      - AUTHENTIK_ERROR_REPORTING__ENABLED=false
+      - AUTHENTIK_LOG_LEVEL=info
+    secrets:
+      - authentik_secret_key
+      - postgres_password
+    volumes:
+      - authentik_media:/media
+      - authentik_templates:/templates
+      - authentik_certs:/certs
+    networks:
+      - edge_network
+      - postgres_network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.authentik.rule=Host(`sso.example.com`)"
+        - "traefik.http.routers.authentik.entrypoints=websecure"
+        - "traefik.http.routers.authentik.tls=true"
+        - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+        - "prometheus.scrape=true"
+        - "prometheus.port=9300"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9000/-/health/live/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2023.10.4
+    command: worker
+    environment:
+      - AUTHENTIK_REDIS__HOST=authentik-redis
+      - AUTHENTIK_POSTGRESQL__HOST=postgres-ha_haproxy
+      - AUTHENTIK_POSTGRESQL__PORT=5432
+      - AUTHENTIK_POSTGRESQL__NAME=authentik
+      - AUTHENTIK_POSTGRESQL__USER=authentik
+      - AUTHENTIK_POSTGRESQL__PASSWORD_FILE=/run/secrets/postgres_password
+      - AUTHENTIK_SECRET_KEY_FILE=/run/secrets/authentik_secret_key
+      - AUTHENTIK_ERROR_REPORTING__ENABLED=false
+      - AUTHENTIK_LOG_LEVEL=info
+    secrets:
+      - authentik_secret_key
+      - postgres_password
+    volumes:
+      - authentik_media:/media
+      - authentik_templates:/templates
+      - authentik_certs:/certs
+    networks:
+      - postgres_network
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "ak healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  authentik-redis:
+    image: redis:7.2-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - authentik_redis:/data
+    networks:
+      - postgres_network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3

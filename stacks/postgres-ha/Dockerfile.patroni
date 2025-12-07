@@ -1,0 +1,25 @@
+FROM postgres:15-alpine
+
+ENV PATRONI_VERSION=3.1.2
+
+RUN apk add --no-cache \
+    python3 \
+    py3-pip \
+    py3-psycopg2 \
+    etcd && \
+    pip3 install --no-cache-dir patroni[etcd]==${PATRONI_VERSION}
+
+RUN addgroup -g 1000 patroni && \
+    adduser -D -u 1000 -G patroni patroni && \
+    mkdir -p /var/lib/postgresql/data && \
+    chown -R patroni:patroni /var/lib/postgresql
+
+COPY config/patroni.yml /etc/patroni/patroni.yml
+
+RUN chown -R patroni:patroni /etc/patroni
+
+USER 1000
+
+EXPOSE 5432 8008
+
+CMD ["patroni", "/etc/patroni/patroni.yml"]

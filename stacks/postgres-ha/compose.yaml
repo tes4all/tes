@@ -1,0 +1,200 @@
+version: '3.8'
+
+networks:
+  postgres_network:
+    driver: overlay
+    attachable: true
+
+volumes:
+  etcd_data:
+  postgres_data_1:
+  postgres_data_2:
+  postgres_data_3:
+
+secrets:
+  postgres_password:
+    external: true
+  replication_password:
+    external: true
+
+services:
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.10
+    environment:
+      - ETCD_NAME=etcd
+      - ETCD_INITIAL_CLUSTER=etcd=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+    volumes:
+      - etcd_data:/etcd-data
+    networks:
+      - postgres_network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres1:
+    build:
+      context: .
+      dockerfile: Dockerfile.patroni
+    image: golden/patroni:15
+    hostname: postgres1
+    environment:
+      - HOSTNAME=postgres1
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - REPLICATION_PASSWORD_FILE=/run/secrets/replication_password
+    secrets:
+      - postgres_password
+      - replication_password
+    volumes:
+      - postgres_data_1:/var/lib/postgresql/data
+    networks:
+      - postgres_network
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postgres2:
+    build:
+      context: .
+      dockerfile: Dockerfile.patroni
+    image: golden/patroni:15
+    hostname: postgres2
+    environment:
+      - HOSTNAME=postgres2
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - REPLICATION_PASSWORD_FILE=/run/secrets/replication_password
+    secrets:
+      - postgres_password
+      - replication_password
+    volumes:
+      - postgres_data_2:/var/lib/postgresql/data
+    networks:
+      - postgres_network
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postgres3:
+    build:
+      context: .
+      dockerfile: Dockerfile.patroni
+    image: golden/patroni:15
+    hostname: postgres3
+    environment:
+      - HOSTNAME=postgres3
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - REPLICATION_PASSWORD_FILE=/run/secrets/replication_password
+    secrets:
+      - postgres_password
+      - replication_password
+    volumes:
+      - postgres_data_3:/var/lib/postgresql/data
+    networks:
+      - postgres_network
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  postgres_exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile.exporter
+    image: golden/postgres-exporter:0.14
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:${POSTGRES_PASSWORD:-changeme}@postgres1:5432/postgres?sslmode=disable
+    networks:
+      - postgres_network
+    cap_drop:
+      - ALL
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      labels:
+        - "prometheus.scrape=true"
+        - "prometheus.port=9187"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9187/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  haproxy:
+    image: haproxy:2.8-alpine
+    networks:
+      - postgres_network
+    ports:
+      - "5432:5432"
+      - "5433:5433"
+    volumes:
+      - ./config/haproxy-postgres.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
