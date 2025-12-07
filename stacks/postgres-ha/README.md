@@ -89,6 +89,8 @@ Production-ready PostgreSQL High Availability cluster using Patroni, etcd, and p
 
 ### Deploy the Stack
 
+#### Docker Compose (Development/Testing)
+
 ```bash
 # Navigate to the stack directory
 cd stacks/postgres-ha
@@ -102,6 +104,26 @@ docker compose logs -f postgres-1
 # Check cluster status
 curl http://localhost:8008/cluster
 ```
+
+#### Docker Swarm (Production)
+
+For production deployments with Docker Swarm:
+
+```bash
+# 1. Change network driver in compose.yaml from 'bridge' to 'overlay'
+sed -i 's/driver: bridge/driver: overlay/' compose.yaml
+
+# 2. Initialize swarm (if not already)
+docker swarm init
+
+# 3. Deploy as a stack
+docker stack deploy -c compose.yaml postgres-ha
+
+# 4. Check service status
+docker stack services postgres-ha
+```
+
+**Note**: The compose.yaml uses `bridge` driver by default for standalone Docker Compose. For Docker Swarm deployments, change to `overlay` driver for multi-host networking.
 
 ### Verify Installation
 
@@ -265,11 +287,13 @@ docker compose up -d
 
 Before deploying to production:
 
-- [ ] **Change all default passwords** in `config/patroni.yml`
+- [ ] **Change all default passwords** in `config/patroni.yml` and use Docker Secrets
 - [ ] **Replace self-signed SSL certificates** with proper CA-signed certs
-- [ ] **Configure Docker Secrets** for sensitive data
+- [ ] **Configure Docker Secrets** for all sensitive data (passwords, connection strings)
+- [ ] **For Docker Swarm**: Change network driver to `overlay` in compose.yaml
 - [ ] **Set resource limits** appropriate for your workload
 - [ ] **Configure backup retention** policies in `pgbackrest.conf`
+- [ ] **Replace simple backup scheduler** with cron or proper job scheduler
 - [ ] **Enable monitoring** (Prometheus/Grafana)
 - [ ] **Test failover scenarios** thoroughly
 - [ ] **Document recovery procedures**

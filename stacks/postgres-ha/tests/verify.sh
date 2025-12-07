@@ -50,15 +50,30 @@ wait_for_health() {
 check_patroni_cluster() {
     echo -e "\n${YELLOW}Checking Patroni cluster status...${NC}"
     
-    for node in postgres-1 postgres-2 postgres-3; do
-        echo -n "Checking $node..."
-        if curl -sf http://localhost:8008/health > /dev/null 2>&1; then
-            echo -e " ${GREEN}✓${NC}"
-        else
-            echo -e " ${RED}✗${NC}"
-            return 1
-        fi
-    done
+    # Check each node on its respective port
+    echo -n "Checking postgres-1 (port 8008)..."
+    if curl -sf http://localhost:8008/health > /dev/null 2>&1; then
+        echo -e " ${GREEN}✓${NC}"
+    else
+        echo -e " ${RED}✗${NC}"
+        return 1
+    fi
+    
+    echo -n "Checking postgres-2 (port 8009)..."
+    if curl -sf http://localhost:8009/health > /dev/null 2>&1; then
+        echo -e " ${GREEN}✓${NC}"
+    else
+        echo -e " ${RED}✗${NC}"
+        return 1
+    fi
+    
+    echo -n "Checking postgres-3 (port 8010)..."
+    if curl -sf http://localhost:8010/health > /dev/null 2>&1; then
+        echo -e " ${GREEN}✓${NC}"
+    else
+        echo -e " ${RED}✗${NC}"
+        return 1
+    fi
     
     # Check cluster status
     echo -n "Checking cluster topology..."
