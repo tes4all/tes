@@ -1,0 +1,58 @@
+services:
+  vaultwarden:
+    build:
+      context: .
+    image: vaultwarden-custom:latest
+    networks:
+      - edge-router-net
+      - postgres-ha
+    environment:
+      # Database connection string (Postgres HA)
+      # Format: postgresql://user:password@host1:port,host2:port/dbname
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@postgres-1:5432,postgres-2:5432,postgres-3:5432/vaultwarden}
+      # Domain configuration
+      - DOMAIN=${DOMAIN:-https://vault.example.com}
+      # Hardening (defaults are in Dockerfile, but explicit here for visibility)
+      - SIGNUPS_ALLOWED=false
+      - WEBSOCKET_ENABLED=true
+    volumes:
+      - vaultwarden-data:/data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        # Edge Router (Traefik) Configuration
+        - "traefik.enable=true"
+        - "traefik.http.routers.vaultwarden.rule=Host(`vault.example.com`)"
+        - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+        - "traefik.http.routers.vaultwarden.tls.certresolver=myresolver"
+        - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+        # WebSocket Configuration
+        - "traefik.http.routers.vaultwarden-ws.rule=Host(`vault.example.com`) && Path(`/notifications/hub`)"
+        - "traefik.http.routers.vaultwarden-ws.entrypoints=websecure"
+        - "traefik.http.routers.vaultwarden-ws.tls.certresolver=myresolver"
+        - "traefik.http.services.vaultwarden-ws.loadbalancer.server.port=3012"
+        # Observability (Placeholder - Vaultwarden needs a sidecar for Prometheus)
+        # - "prometheus.scrape=false"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/api/alive"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    cap_drop:
+      - ALL
+    # Secrets would be used here in a real Swarm deployment
+    # secrets:
+    #   - db_password
+    #   - admin_token
+
+networks:
+  edge-router-net:
+    external: true
+  postgres-ha:
+    external: true
+
+volumes:
+  vaultwarden-data:
