@@ -1,0 +1,75 @@
+scope: postgres-cluster
+namespace: /postgres-ha/
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: '{{ HOSTNAME }}:8008'
+
+etcd3:
+  hosts: etcd-1:2379,etcd-2:2379,etcd-3:2379
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+        wal_level: replica
+        hot_standby: "on"
+        max_connections: 100
+        max_worker_processes: 8
+        wal_keep_size: 1024
+        max_wal_senders: 10
+        max_replication_slots: 10
+        checkpoint_timeout: 30
+        ssl: "on"
+        ssl_cert_file: /etc/postgresql/ssl/server.crt
+        ssl_key_file: /etc/postgresql/ssl/server.key
+        ssl_ca_file: /etc/postgresql/ssl/ca.crt
+
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+
+  pg_hba:
+    - local   all             all                                     trust
+    - host    all             all             127.0.0.1/32            md5
+    - host    all             all             ::1/128                 md5
+    - hostssl replication     replicator      all                     md5
+    - hostssl all             all             all                     md5
+
+  users:
+    admin:
+      password: admin
+      options:
+        - createrole
+        - createdb
+    replicator:
+      password: replicator
+      options:
+        - replication
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: '{{ HOSTNAME }}:5432'
+  data_dir: /var/lib/postgresql/data
+  bin_dir: /usr/local/bin
+  authentication:
+    replication:
+      username: replicator
+      password: replicator
+    superuser:
+      username: postgres
+      password: postgres
+  parameters:
+    unix_socket_directories: '/var/run/postgresql'
+
+tags:
+    nofailover: false
+    noloadbalance: false
+    clonefrom: false
+    nosync: false
