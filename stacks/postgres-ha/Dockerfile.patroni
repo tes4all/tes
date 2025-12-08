@@ -9,18 +9,24 @@ RUN apk add --no-cache \
     py3-urllib3 \
     curl \
     ca-certificates \
+    gcc \
+    python3-dev \
+    musl-dev \
+    linux-headers \
+    openssl \
     && pip3 install --no-cache-dir --break-system-packages patroni[etcd3]==3.2.0
 
-# Create non-root user
-RUN addgroup -g 1000 patroni && \
-    adduser -D -u 1000 -G patroni patroni && \
-    mkdir -p /var/lib/postgresql/data /var/run/postgresql /var/log/postgresql /etc/postgresql/ssl && \
-    chown -R patroni:patroni /var/lib/postgresql /var/run/postgresql /var/log/postgresql /etc/postgresql
+# Create directories and set permissions
+RUN mkdir -p /var/lib/postgresql/data /var/run/postgresql /var/log/postgresql /etc/postgresql/ssl && \
+    chmod 700 /var/lib/postgresql/data && \
+    chown -R postgres:postgres /var/lib/postgresql /var/run/postgresql /var/log/postgresql /etc/postgresql
 
 # Copy configuration files
 COPY config/patroni.yml /etc/patroni/patroni.yml
 COPY config/postgres.conf /etc/postgresql/postgres.conf
 COPY config/pg_hba.conf /etc/postgresql/pg_hba.conf
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # Generate self-signed SSL certificates (for development)
 # In production, mount proper certificates via Docker secrets
@@ -30,13 +36,13 @@ RUN cd /etc/postgresql/ssl && \
     openssl req -new -x509 -days 365 -nodes -text \
         -out ca.crt -keyout ca.key -subj "/CN=postgres-ca" && \
     chmod 600 server.key ca.key && \
-    chown -R patroni:patroni /etc/postgresql/ssl
+    chown -R postgres:postgres /etc/postgresql/ssl
 
 # Set working directory
-WORKDIR /home/patroni
+WORKDIR /home/postgres
 
 # Switch to non-root user
-USER 1000:1000
+USER postgres
 
 # Health check
 HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
@@ -46,5 +52,5 @@ HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
 EXPOSE 5432 8008
 
 # Start Patroni
-ENTRYPOINT ["patroni"]
-CMD ["/etc/patroni/patroni.yml"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["patroni", "/etc/patroni/patroni.yml"]
