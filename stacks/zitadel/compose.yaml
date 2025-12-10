@@ -1,0 +1,47 @@
+services:
+  zitadel:
+    build:
+      context: .
+    image: zitadel-custom:latest
+    command: ["start-from-init", "--config", "/app/zitadel.yaml", "--masterkeyFromEnv"]
+    environment:
+      - ZITADEL_DATABASE_POSTGRES_USER_PASSWORD=${ZITADEL_DB_PASSWORD:-zitadel_secret}
+      - ZITADEL_ADMIN_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - ZITADEL_MASTERKEY=${ZITADEL_MASTERKEY:-MasterkeyNeedsToBe32BytesLong123}
+      # Domain configuration
+      - ZITADEL_EXTERNALPORT=443
+      - ZITADEL_EXTERNALSECURE=true
+      - ZITADEL_EXTERNALDOMAIN=${DOMAIN:-auth.example.com}
+    networks:
+      - edge-router-net
+      - postgres-ha
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        # Edge Router (Traefik) Configuration
+        - "traefik.enable=true"
+        - "traefik.http.routers.zitadel.rule=Host(`auth.example.com`)"
+        - "traefik.http.routers.zitadel.entrypoints=websecure"
+        - "traefik.http.routers.zitadel.tls.certresolver=myresolver"
+        - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
+        # HTTP/2 support (Zitadel uses gRPC)
+        - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
+        # Observability
+        - "prometheus.scrape=true"
+        - "prometheus.port=8080"
+    healthcheck:
+      test: ["CMD", "/app/zitadel", "healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    cap_drop:
+      - ALL
+
+networks:
+  edge-router-net:
+    external: true
+  postgres-ha:
+    external: true

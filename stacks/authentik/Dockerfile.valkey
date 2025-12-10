@@ -1,0 +1,9 @@
+FROM valkey/valkey:8-alpine
+
+# Create user 1000 if it doesn't exist
+RUN id -u 1000 &>/dev/null || adduser -D -u 1000 valkey-user
+COPY config/valkey.conf /usr/local/etc/valkey/valkey.conf
+RUN chown 1000:1000 /usr/local/etc/valkey/valkey.conf
+
+USER 1000
+CMD [ "valkey-server", "/usr/local/etc/valkey/valkey.conf" ]

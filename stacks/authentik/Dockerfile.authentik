@@ -1,0 +1,7 @@
+FROM ghcr.io/goauthentik/server:2024.2.1
+
+USER 0
+COPY config/authentik.yml /etc/authentik/config.yml
+RUN chown 1000:1000 /etc/authentik/config.yml
+
+USER 1000

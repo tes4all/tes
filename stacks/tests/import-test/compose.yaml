@@ -1,0 +1,12 @@
+include:
+  - ../../authentik/compose.yaml
+  - ../../postgres-ha/compose.yaml
+  - ../../edge-router/compose.yaml
+  - ../../vaultwarden/compose.yaml
+  - ../../zitadel/compose.yaml
+
+services:
+  # A dummy service to ensure the compose file is valid even if includes are empty (which they shouldn't be)
+  test-runner:
+    image: alpine:latest
+    command: ["echo", "Integration test"]

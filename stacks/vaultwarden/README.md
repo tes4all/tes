@@ -20,6 +20,17 @@ The stack is configured via Environment Variables.
 | `SIGNUPS_ALLOWED` | Allow new user signups | `false` |
 | `WEBSOCKET_ENABLED` | Enable WebSocket notifications | `true` |
 
+## Integration
+
+### Include in Parent Project
+
+Add this to your main `compose.yaml`:
+
+```yaml
+include:
+  - path: ./stacks/vaultwarden/compose.yaml
+```
+
 ## Usage
 
 ### Docker Swarm

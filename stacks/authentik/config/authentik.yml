@@ -1,0 +1,15 @@
+log_level: info
+error_reporting:
+  enabled: false
+  send_pii: false
+postgresql:
+  host: postgres-ha
+  port: 5432
+  name: authentik
+  user: authentik
+  password: "env://POSTGRES_PASSWORD"
+redis:
+  host: valkey
+  port: 6379
+  password: ""
+  db: 0

@@ -18,6 +18,17 @@ Internet → HAProxy (L4/TCP) → Traefik (L7/HTTP) → Backend Services
 - **Baked configurations**: No bind-mounted config files
 - **Security headers**: Traefik applies HSTS, XSS protection
 
+## Integration
+
+### Include in Parent Project
+
+Add this to your main `compose.yaml`:
+
+```yaml
+include:
+  - path: ./stacks/edge-router/compose.yaml
+```
+
 ## Quick Start
 
 ```bash

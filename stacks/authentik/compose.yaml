@@ -1,0 +1,95 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.authentik
+    image: authentik-server-custom:latest
+    command: server
+    environment:
+      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY:-generate_me_please_securely}
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      # Config is loaded from /etc/authentik/config.yml
+    networks:
+      - edge-router-net
+      - postgres-ha
+      - internal
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        # Edge Router (Traefik) Configuration
+        - "traefik.enable=true"
+        - "traefik.http.routers.authentik.rule=Host(`auth.example.com`)"
+        - "traefik.http.routers.authentik.entrypoints=websecure"
+        - "traefik.http.routers.authentik.tls.certresolver=myresolver"
+        - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+        # Observability
+        - "prometheus.scrape=true"
+        - "prometheus.port=9300"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/-/health/live/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    cap_drop:
+      - ALL
+    volumes:
+      - media:/media
+      - custom-templates:/templates
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.authentik
+    image: authentik-server-custom:latest
+    command: worker
+    environment:
+      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY:-generate_me_please_securely}
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${POSTGRES_PASSWORD:-postgres}
+    networks:
+      - postgres-ha
+      - internal
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    cap_drop:
+      - ALL
+    # Worker doesn't expose HTTP, healthcheck via process or internal check if possible
+    # For now, rely on restart policy
+
+  valkey:
+    build:
+      context: .
+      dockerfile: Dockerfile.valkey
+    image: authentik-valkey-custom:latest
+    networks:
+      - internal
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    cap_drop:
+      - ALL
+    volumes:
+      - valkey-data:/data
+
+networks:
+  edge-router-net:
+    external: true
+  postgres-ha:
+    external: true
+  internal:
+    driver: overlay
+
+volumes:
+  media:
+  custom-templates:
+  valkey-data:
