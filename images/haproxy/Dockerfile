@@ -1,6 +1,6 @@
 # HAProxy 2.9 - L4 Load Balancer
 # Golden Stack - Non-Root, Baked Config
-FROM haproxy:2.9.12-alpine
+FROM haproxy:3.3.0-alpine
 
 # Create non-root user
 USER root
