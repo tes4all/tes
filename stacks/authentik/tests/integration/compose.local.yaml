@@ -1,0 +1,23 @@
+include:
+  - ../../compose.yaml
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+    networks:
+      - postgres-ha
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  postgres-ha:
+    external: true
+  edge-router-net:
+    external: true

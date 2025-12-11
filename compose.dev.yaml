@@ -1,0 +1,10 @@
+include:
+  - path: ./stacks/edge-router/compose.yaml
+
+services:
+  haproxy:
+    build:
+      context: ./images/haproxy
+  traefik:
+    build:
+      context: ./images/traefik

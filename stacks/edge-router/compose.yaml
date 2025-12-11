@@ -7,10 +7,7 @@ services:
   # HAProxy - L4 TCP Load Balancer (Global Mode)
   # ===========================================
   haproxy:
-    build:
-      context: .
-      dockerfile: Dockerfile.haproxy
-    image: golden/haproxy:2.9.12
+    image: ${REGISTRY:-ghcr.io/tes4all}/haproxy:${HAPROXY_VERSION:-2.9.12}
     hostname: haproxy-{{.Task.Slot}}
     networks:
       - edge-internal
@@ -72,10 +69,7 @@ services:
   # Traefik - L7 HTTP Reverse Proxy
   # ===========================================
   traefik:
-    build:
-      context: .
-      dockerfile: Dockerfile.traefik
-    image: golden/traefik:3.2.3
+    image: ${REGISTRY:-ghcr.io/tes4all}/traefik:${TRAEFIK_VERSION:-3.2.3}
     hostname: traefik-{{.Task.Slot}}
     networks:
       - edge-internal

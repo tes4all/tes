@@ -1,0 +1,2 @@
+include:
+  - https://github.com/tes4all/tes.git#main:stacks/edge-router/compose.yaml

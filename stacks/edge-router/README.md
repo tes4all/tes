@@ -18,15 +18,20 @@ Internet → HAProxy (L4/TCP) → Traefik (L7/HTTP) → Backend Services
 - **Baked configurations**: No bind-mounted config files
 - **Security headers**: Traefik applies HSTS, XSS protection
 
-## Integration
-
-### Include in Parent Project
-
-Add this to your main `compose.yaml`:
+## How to use in your project
+In your project's `compose.yaml`:
 
 ```yaml
 include:
-  - path: ./stacks/edge-router/compose.yaml
+  - git: https://github.com/tes4all/tes.git
+    ref: main
+    file: stacks/edge-router/compose.yaml
+
+services:
+  # You can override environment variables here
+  traefik:
+    environment:
+      - ACME_EMAIL=admin@my-new-project.com
 ```
 
 ## Quick Start
