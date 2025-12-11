@@ -39,5 +39,5 @@ jobs:
         file: ${{ matrix.dockerfile }}
         push: ${{ github.event_name != 'pull_request' }}
         tags: |
-          ${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}:latest
-          ${{ secrets.DOCKER_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+          ${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.image }}:latest
+          ${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
