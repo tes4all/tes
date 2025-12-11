@@ -30,6 +30,18 @@ main() {
     log_info "=== Edge Router Stack Verification ==="
     cd "$STACK_DIR"
 
+    # Load environment variables for testing
+    if [ -f "tests/.env" ]; then
+        log_info "Loading environment variables from tests/.env"
+        set -a
+        source "tests/.env"
+        set +a
+    fi
+
+    # Set defaults if not set
+    export HAPROXY_VERSION="${HAPROXY_VERSION:-3.3.0}"
+    export TRAEFIK_VERSION="${TRAEFIK_VERSION:-3.6.4}"
+
     # Step 1: Build images
     log_info "Building images..."
     docker compose -p "$COMPOSE_PROJECT" build --no-cache

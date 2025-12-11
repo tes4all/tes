@@ -11,6 +11,16 @@ cd "$SCRIPT_DIR"
 echo "=== Running Edge-Router Integration Test ($MODE) ==="
 
 # 1. Setup Environment
+# Load versions from parent test env if available
+if [ -f "../.env" ]; then
+    set -a
+    source "../.env"
+    set +a
+fi
+
+# Set defaults if not set
+export HAPROXY_VERSION="${HAPROXY_VERSION:-3.3.0}"
+export TRAEFIK_VERSION="${TRAEFIK_VERSION:-3.6.4}"
 export ACME_EMAIL="test@example.com"
 
 # 2. Select Compose File
