@@ -1,4 +1,4 @@
-# Traefik 3.2 - L7 Reverse Proxy
+# Traefik - L7 Reverse Proxy
 # Golden Stack - Non-Root, Baked Config
 FROM traefik:3.6.4
 
