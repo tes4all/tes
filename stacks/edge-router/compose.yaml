@@ -89,7 +89,7 @@ services:
       # Persistent ACME certificates
       - acme-data:/acme
     environment:
-      - ACME_EMAIL=${ACME_EMAIL}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
     cap_drop:
       - ALL
     cap_add:
