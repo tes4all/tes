@@ -2,6 +2,20 @@ include:
   - https://github.com/tes4all/tes.git#main:stacks/vaultwarden/compose.yaml
 
 services:
+  vaultwarden:
+    networks:
+      - postgres-ha
+      - edge-router-net
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/vaultwarden
+    depends_on:
+      - postgres
+
+  # Disable internal DB
+  db:
+    deploy:
+      replicas: 0
+
   postgres:
     image: postgres:14-alpine
     environment:

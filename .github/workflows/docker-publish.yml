@@ -16,6 +16,9 @@ jobs:
           - image: traefik
             context: images/traefik
             dockerfile: images/traefik/Dockerfile
+          - image: vaultwarden
+            context: images/vaultwarden
+            dockerfile: images/vaultwarden/Dockerfile
 
     steps:
     - uses: actions/checkout@v4

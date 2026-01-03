@@ -31,11 +31,15 @@ fi
 echo "Validating config..."
 docker compose -f $COMPOSE_FILE config > /dev/null
 
-# 5. Run Stack
+# 5. Build Image (if needed)
+echo "Building image..."
+docker build -t tes4all/vaultwarden:latest ../../../images/vaultwarden
+
+# 6. Run Stack
 echo "Starting stack..."
 docker compose -f $COMPOSE_FILE up -d --wait
 
-# 6. Verify
+# 7. Verify
 echo "Verifying services..."
 if docker compose -f $COMPOSE_FILE ps | grep -q "vaultwarden"; then
     echo "✅ Vaultwarden is running"

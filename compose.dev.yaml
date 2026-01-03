@@ -8,3 +8,6 @@ services:
   traefik:
     build:
       context: ./images/traefik
+  vaultwarden:
+    build:
+      context: ./images/vaultwarden

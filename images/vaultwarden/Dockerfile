@@ -1,4 +1,4 @@
-FROM vaultwarden/server:1.32.0
+FROM vaultwarden/server:1.35.1-alpine
 
 # Security: Create non-root user
 # The official image runs as root by default. We create a user to run the service.
@@ -17,9 +17,11 @@ ENV SIGNUPS_ALLOWED=false
 ENV SHOW_PASSWORD_HINT=false
 ENV WEBSOCKET_ENABLED=true
 ENV ROCKET_WORKERS=10
+# Use non-privileged port for non-root user
+ENV ROCKET_PORT=8080
 
-# Expose ports (80 for HTTP, 3012 for WebSocket)
-EXPOSE 80
+# Expose ports (8080 for HTTP, 3012 for WebSocket)
+EXPOSE 8080
 EXPOSE 3012
 
 # Define volume for persistence
