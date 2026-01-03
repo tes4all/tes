@@ -3,7 +3,9 @@ FROM vaultwarden/server:1.35.1-alpine
 # Security: Create non-root user
 # The official image runs as root by default. We create a user to run the service.
 # Note: We use numeric ID 1000 for better compatibility.
-RUN useradd -m -u 1000 -s /bin/bash vaultwarden
+# Alpine uses adduser/addgroup instead of useradd
+RUN addgroup -g 1000 vaultwarden && \
+    adduser -u 1000 -G vaultwarden -h /data -s /bin/sh -D vaultwarden
 
 # Prepare data directory with correct permissions
 RUN mkdir -p /data && chown -R vaultwarden:vaultwarden /data
