@@ -7,7 +7,7 @@ services:
   # HAProxy - L4 TCP Load Balancer (Global Mode)
   # ===========================================
   haproxy:
-    image: tes4all/haproxy:${HAPROXY_VERSION}
+    image: tes4all/haproxy:${HAPROXY_VERSION:-3.3.1-alpine}
     hostname: haproxy-{{.Task.Slot}}
     networks:
       - edge-internal
@@ -43,6 +43,8 @@ services:
       placement:
         constraints:
           - node.role == manager
+      labels:
+        - "traefik.enable=false"
       resources:
         limits:
           cpus: "0.5"
@@ -69,7 +71,7 @@ services:
   # Traefik - L7 HTTP Reverse Proxy
   # ===========================================
   traefik:
-    image: tes4all/traefik:${TRAEFIK_VERSION}
+    image: tes4all/traefik:${TRAEFIK_VERSION:-3.6.6}
     hostname: traefik-{{.Task.Slot}}
     networks:
       - edge-internal
@@ -111,6 +113,8 @@ services:
           - node.role == manager
         preferences:
           - spread: node.id
+      labels:
+        - "traefik.enable=false"
       resources:
         limits:
           cpus: "1.0"
