@@ -2,7 +2,7 @@ name: vaultwarden
 
 services:
   vaultwarden:
-    image: tes4all/vaultwarden:${VAULTWARDEN_VERSION}
+    image: tes4all/vaultwarden:${VAULTWARDEN_VERSION:-1.35.1-alpine}
     networks:
       - default
       # Uncomment to use external edge router
@@ -10,27 +10,37 @@ services:
       # Uncomment to use external postgres
       # - postgres-ha
     ports:
-      # Expose port for standalone usage
-      - "${PORT:-8080}:8080"
+      # Expose port for standalone usage.
+      - "${VAULTWARDEN_PORT:-8091}:8080"
     environment:
       # Database connection string
       # Default: Internal Postgres
       # External: postgresql://user:password@host:port/dbname
-      - DATABASE_URL=${DATABASE_URL:-postgresql://vaultwarden:secret@db:5432/vaultwarden}
+      # - DATABASE_URL=${DATABASE_URL:-postgresql://vaultwarden:secret@db:5432/vaultwarden}
       # Domain configuration
-      - DOMAIN=${DOMAIN:-http://localhost:8080}
+      - DOMAIN=${DOMAIN:-http://localhost:${VAULTWARDEN_PORT:-8091}}
       # Hardening
-      - SIGNUPS_ALLOWED=false
-      - WEBSOCKET_ENABLED=true
+      - SIGNUPS_ALLOWED=${SIGNUPS_ALLOWED:-false}
+      - WEBSOCKET_ENABLED=${WEBSOCKET_ENABLED:-true}
+      # Internal port configuration (matches container port)
+      - ROCKET_PORT=8080
     volumes:
       - vaultwarden-data:/data
     depends_on:
       db:
         condition: service_healthy
+        required: false # Allow starting without internal DB if configured externally
     deploy:
       replicas: 1
       restart_policy:
         condition: on-failure
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
       labels:
         # Edge Router (Traefik) Configuration
         - "traefik.enable=true"
@@ -49,31 +59,60 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    # Security Hardening
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
     cap_drop:
       - ALL
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   db:
+    profiles: [postgres]
     image: postgres:15-alpine
     restart: always
     volumes:
       - db-data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=vaultwarden
-      - POSTGRES_PASSWORD=secret
-      - POSTGRES_DB=vaultwarden
+      - POSTGRES_USER=${POSTGRES_USER:-vaultwarden}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret}
+      - POSTGRES_DB=${POSTGRES_DB:-vaultwarden}
     networks:
       - default
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vaultwarden"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vaultwarden}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    # Security Hardening
+    security_opt:
+      - no-new-privileges:true
+    # Postgres needs write access to /var/lib/postgresql/data (volume) and /run/postgresql (tmpfs usually)
+    # read_only: true # Can be tricky with postgres images without careful tmpfs config
+    shm_size: 128mb
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   default:
   # edge-router-net:
-  #   external: true
-  # postgres-ha:
   #   external: true
 
 volumes:

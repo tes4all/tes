@@ -15,8 +15,9 @@ The stack is configured via Environment Variables.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `VAULTWARDEN_PORT` | Port to expose on host | `8091` |
 | `DATABASE_URL` | Connection string for Postgres | Internal DB |
-| `DOMAIN` | The public domain for the vault | `http://localhost:8080` |
+| `DOMAIN` | The public domain for the vault | `http://localhost:8091` |
 | `SIGNUPS_ALLOWED` | Allow new user signups | `false` |
 | `WEBSOCKET_ENABLED` | Enable WebSocket notifications | `true` |
 
@@ -35,7 +36,7 @@ include:
 
 ### Standalone (Default)
 
-The stack runs with an internal PostgreSQL database and exposes port 8080 by default.
+The stack runs with an internal PostgreSQL database and exposes port 8091 by default.
 
 ```bash
 docker compose up -d
