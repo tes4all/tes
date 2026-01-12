@@ -1,57 +1,28 @@
 # Zitadel Golden Stack
 
-This stack provides a hardened, high-availability Zitadel Identity Provider.
+This stack provides a complete Zitadel deployment including:
+- Zitadel (Main Service)
+- Zitadel Login V2
+- PostgreSQL Database
 
-## Features
+## usage
 
-- **Security Hardened**: Runs as non-root user, immutable config, and `cap_drop: [ALL]`.
-- **High Availability**: Stateless architecture (requires HA Postgres).
-- **Database**: Connects to the `postgres-ha` stack.
-- **Observability**: Prometheus metrics exposed, Traefik integration pre-configured (HTTP/2).
+To use this stack, include it in your swarm stack definition or deploy it directly setting the necessary environment variables.
 
 ## Configuration
 
-The stack is configured via Environment Variables and a baked config file.
-
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `ZITADEL_MASTERKEY` | Master key for encryption (32 bytes) | `MasterkeyNeeds...` |
-| `POSTGRES_PASSWORD` | Password for the Postgres admin | `postgres` |
-| `ZITADEL_DB_PASSWORD` | Password for the Zitadel DB user | `zitadel_secret` |
-| `DOMAIN` | Public domain | `auth.example.com` |
+| `ZITADEL_HOSTNAME` | The hostname for Zitadel | `auth.example.com` |
+| `ZITADEL_MASTERKEY` | Masterkey (32 chars) | `MasterkeyNeedsToHave32Characters` |
+| `POSTGRES_ADMIN_PASSWORD` | Postgres admin password | `postgres` |
+| `ZITADEL_DB_PASSWORD` | Zitadel DB user password | `zitadel` |
+| `ZITADEL_ORG_NAME` | Initial Organization Name | `MyOrg` |
+| `ZITADEL_ADMIN_USERNAME` | Initial Admin Username | `zitadel-admin` |
+| `ZITADEL_ADMIN_PASSWORD` | Initial Admin Password | `Password1!` |
+| `TRAEFIK_NETWORK` | The external traefik network | `edge-external` |
 
-## Integration
+## Notes
 
-### Include in Parent Project
-
-Add this to your main `compose.yaml`:
-
-```yaml
-include:
-  - path: ./stacks/zitadel/compose.yaml
-```
-
-## Usage
-
-### Docker Swarm
-
-1. Ensure `edge-router-net` and `postgres-ha` networks exist.
-2. Deploy the stack:
-
-```bash
-docker stack deploy -c compose.yaml zitadel
-```
-
-### Docker Compose (Testing)
-
-```bash
-docker compose up -d
-```
-
-## Verification
-
-Run the included verification script to build and test the stack (spins up a temporary Postgres):
-
-```bash
-./tests/verify.sh
-```
+- This stack includes a PostgreSQL instance. For production, consider using an external database or HA setup if required.
+- The `login` service provides the V2 Login UI.
