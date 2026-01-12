@@ -20,8 +20,8 @@ services:
     command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}"
     environment:
       ZITADEL_EXTERNALDOMAIN: ${ZITADEL_HOSTNAME:-auth.example.com}
-      ZITADEL_EXTERNALPORT: 443
-      ZITADEL_EXTERNALSECURE: "true"
+      ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNALPORT:-443}
+      ZITADEL_EXTERNALSECURE: "${ZITADEL_EXTERNALSECURE:-true}"
       ZITADEL_TLS_ENABLED: "false"
 
       # Database connection settings.
@@ -42,10 +42,10 @@ services:
       ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE: '2029-01-01T00:00:00Z'
       
       ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "true"
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: https://${ZITADEL_HOSTNAME:-auth.example.com}/ui/v2/login
-      ZITADEL_OIDC_DEFAULTLOGINURLV2: https://${ZITADEL_HOSTNAME:-auth.example.com}/ui/v2/login/login?authRequest=
-      ZITADEL_OIDC_DEFAULTLOGOUTURLV2: https://${ZITADEL_HOSTNAME:-auth.example.com}/ui/v2/login/logout?post_logout_redirect=
-      ZITADEL_SAML_DEFAULTLOGINURLV2: https://${ZITADEL_HOSTNAME:-auth.example.com}/ui/v2/login/login?samlRequest=
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: ${ZITADEL_SCHEME:-https}://${ZITADEL_HOSTNAME:-auth.example.com}:${ZITADEL_EXTERNALPORT:-443}/ui/v2/login
+      ZITADEL_OIDC_DEFAULTLOGINURLV2: ${ZITADEL_SCHEME:-https}://${ZITADEL_HOSTNAME:-auth.example.com}:${ZITADEL_EXTERNALPORT:-443}/ui/v2/login/login?authRequest=
+      ZITADEL_OIDC_DEFAULTLOGOUTURLV2: ${ZITADEL_SCHEME:-https}://${ZITADEL_HOSTNAME:-auth.example.com}:${ZITADEL_EXTERNALPORT:-443}/ui/v2/login/logout?post_logout_redirect=
+      ZITADEL_SAML_DEFAULTLOGINURLV2: ${ZITADEL_SCHEME:-https}://${ZITADEL_HOSTNAME:-auth.example.com}:${ZITADEL_EXTERNALPORT:-443}/ui/v2/login/login?samlRequest=
 
       ZITADEL_FIRSTINSTANCE_ORG_NAME: ${ZITADEL_ORG_NAME:-MyOrg}
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_ADMIN_USERNAME:-zitadel-admin}
