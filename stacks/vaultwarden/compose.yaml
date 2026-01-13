@@ -2,7 +2,7 @@ name: vaultwarden
 
 services:
   vaultwarden:
-    image: tes4all/vaultwarden:${VAULTWARDEN_VERSION:-1.35.1-alpine}
+    image: tes4all/vaultwarden:${VAULTWARDEN_VERSION:-1.35.2-alpine}
     networks:
       - default
       # Uncomment to use external edge router
