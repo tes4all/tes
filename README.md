@@ -16,6 +16,19 @@ Or using pip:
 pip install git+https://github.com/tes4all/tes.git
 ```
 
+## Update / Reinstall
+
+```bash
+pipx upgrade tes-cli
+pipx reinstall tes-cli
+```
+
+Or using pip:
+
+```bash
+pip install --upgrade --force-reinstall git+https://github.com/tes4all/tes.git
+```
+
 ## Usage
 
 After installation, you can use the `tes` command:
