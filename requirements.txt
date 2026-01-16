@@ -4,3 +4,6 @@ click
 pyyaml
 # cli.shopify.printess
 requests
+
+# cli.aws
+boto3
