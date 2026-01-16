@@ -18,9 +18,9 @@ def _to_bind(zone_name, records):
     lines.append(f"; Exported (y-m-d hh:mm:ss): {now}")
     lines.append("; Actual version")
     lines.append("")
-    
+
     c_zone_name = zone_name.rstrip(".") + "."
-    
+
     def format_name(record_name):
         if record_name == c_zone_name:
             return "@"
@@ -32,13 +32,13 @@ def _to_bind(zone_name, records):
     if soa_record:
         default_ttl = soa_record.get("TTL", 3600)
         lines.append(f"$TTL {default_ttl}")
-    
+
     def format_records(recs):
         for r in recs:
             name = format_name(r["Name"])
             ttl = r.get("TTL", "")
             r_type = r["Type"]
-            
+
             if "ResourceRecords" in r:
                 for rr in r["ResourceRecords"]:
                     value = rr["Value"]
@@ -51,14 +51,14 @@ def _to_bind(zone_name, records):
     # Order: SOA, NS, others
     if soa_record:
         format_records([soa_record])
-    
+
     ns_records = [r for r in records if r["Type"] == "NS"]
     format_records(ns_records)
-    
+
     other_records = [r for r in records if r["Type"] not in ("SOA", "NS")]
     other_records.sort(key=lambda x: x["Name"])
     format_records(other_records)
-    
+
     return "\n".join(lines)
 
 
@@ -89,7 +89,7 @@ def export(id, name, output, format):
 
             if not found:
                  raise click.UsageError(f"Hosted zone '{name}' not found.")
-        
+
         # If we need name for BIND but only have ID
         if not name and format == "bind":
              z_info = client.get_hosted_zone(Id=id)
