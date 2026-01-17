@@ -34,6 +34,7 @@ def _to_bind(zone_name, records):
         lines.append(f"$TTL {default_ttl}")
 
     def format_records(recs):
+        processed_cnames = set()
         for r in recs:
             name = format_name(r["Name"])
             ttl = r.get("TTL", "")
@@ -45,6 +46,10 @@ def _to_bind(zone_name, records):
                     lines.append(f"{name:<20} {ttl:<5} IN {r_type:<4} {value}")
             elif "AliasTarget" in r:
                 alias = r["AliasTarget"]
+                if name in processed_cnames:
+                    lines.append(f"; Skipped duplicate ALIAS/CNAME for {name}")
+                    continue
+                processed_cnames.add(name)
                 lines.append(f"; ALIAS record to {alias['DNSName']}")
                 lines.append(f"{name:<20} {ttl:<5} IN CNAME {alias['DNSName']}")
 
