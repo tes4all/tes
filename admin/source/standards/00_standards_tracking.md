@@ -22,6 +22,7 @@ Ziel ist es, den aktuellen Stand ("v0.1 - Best Practice Wissen") später gezielt
 | **datev_best_practices_requirements.md** | DATEV Hilfe-Center / Best Practices | v0.1 (Tech-Stack) | Tech-Cluster (SQL, OS) | Prüfen neuer DATEV-Doks (z.B. bei SQL 2022 Release). Sehr dynamisch, da technische Abhängigkeit. |
 | **marisk_at_7_3_requirements.md** | MaRisk (BaFin) | v0.1 (AT 7.3 Fokus) | AT 7.3 Struktur (Tz. 1-7) | Struktur ist bereits sehr nah am Originaltext (BaFin Rundschreiben sind amtliche Werke). |
 | **stgb_203_bstbk_requirements.md** | § 203 StGB / Berufsrecht | v0.1 (Juristischer Fokus) | Gesetzliche Anforderungen | Stabil. Änderungen nur bei StGB-Novellen oder neuen Kammerhinweisen. |
+| **nis2_requirements.md** | NIS-2 Richtlinie / BSIG (KRITIS) | v0.1 (Gesetz/BSIG) | Artikel-Struktur (Governance, Risk) | Abgleich mit finalem deutschen BSIG-Umsetzungsgesetz. Als Gesetzestext gemeinfrei (§ 5 UrhG), Umsetzungspflichten für KMU/MSP beachten. |
 
 ## Versions-Historie
 
