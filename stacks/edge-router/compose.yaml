@@ -73,25 +73,26 @@ services:
   traefik:
     image: tes4all/traefik:${TRAEFIK_VERSION:-3.6.6}
     hostname: traefik-{{.Task.Slot}}
+    configs:
+      - source: traefik_static
+        target: /etc/traefik/traefik.yml
     networks:
       - edge-internal
       - edge-external
     ports:
-      - target: 8083
+      - target: 8083 # Dashboard/Metrics
         published: 8083
         protocol: tcp
         mode: host
-      - target: 8082
+      - target: 8082 # Ping
         published: 8082
         protocol: tcp
         mode: host
     volumes:
-      # Docker socket (read-only) for service discovery
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Persistent ACME certificates
-      - acme-data:/acme
+      - acme-data:/certs # Shared volume for certs
     environment:
-      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL}
+      - TZ=UTC
     cap_drop:
       - ALL
     cap_add:
@@ -114,7 +115,22 @@ services:
         preferences:
           - spread: node.id
       labels:
-        - "traefik.enable=false"
+        # Enable Traefik to route itself (dashboard)
+        - "traefik.enable=true"
+        - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
+        - "traefik.http.routers.traefik-dashboard.service=api@internal"
+        - "traefik.http.routers.traefik-dashboard.entrypoints=web"
+
+        # ROUTING CHALLENGE: Route /.well-known/acme-challenge/ to cert-manager
+        - "traefik.http.routers.acme-challenge.rule=PathPrefix(`/.well-known/acme-challenge/`)"
+        - "traefik.http.routers.acme-challenge.entrypoints=web"
+        - "traefik.http.routers.acme-challenge.service=cert-manager-svc"
+        - "traefik.http.services.cert-manager-svc.loadbalancer.server.port=8080"
+
+        # Prometheus
+        - "prometheus.scrape=true"
+        - "prometheus.port=8083"
+        - "prometheus.path=/metrics"
       resources:
         limits:
           cpus: "1.0"
@@ -131,11 +147,40 @@ services:
         parallelism: 1
         delay: 30s
         failure_action: rollback
-        order: start-first
-    labels:
-      - "prometheus.scrape=true"
-      - "prometheus.port=8083"
-      - "prometheus.path=/metrics"
+        order: stop-first
+
+  # ===========================================
+  # Cert Manager - Lego Controller
+  # ===========================================
+  cert-manager:
+    image: goacme/lego:v4.14.2
+    entrypoint: ["/bin/sh", "/config/cert-manager.sh"]
+    networks:
+      - edge-internal
+      - edge-external
+    configs:
+      - source: cert_manager_script
+        target: /config/cert-manager.sh
+        mode: 0555
+    volumes:
+      - acme-data:/certs
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+
+      # DNS-01 Provider Config
+      # Set the provider name (e.g. infomaniak, route53, cloudflare)
+      - LEGO_DNS_PROVIDER=${LEGO_DNS_PROVIDER:-infomaniak}
+
+      # Configuration for the script
+      - DOMAINS_WILDCARD=${DOMAINS_WILDCARD} # e.g. "my-company.com"
+      - DOMAINS_CUSTOMER=${DOMAINS_CUSTOMER} # e.g. "foo.client.com,bar.client.com"
+      - LEGO_SERVER=${LEGO_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
 
 networks:
   edge-internal:
@@ -146,3 +191,9 @@ networks:
 volumes:
   acme-data:
     driver: local
+
+configs:
+  cert_manager_script:
+    file: ./config/cert-manager.sh
+  traefik_static:
+    file: ./config/traefik.yaml

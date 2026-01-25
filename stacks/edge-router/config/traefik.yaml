@@ -1,0 +1,54 @@
+api:
+  dashboard: true
+
+providers:
+  swarm:
+    exposedByDefault: false
+  file:
+    # stateless ACME: Read certs from shared NFS volume (Cert Manager)
+    filename: /certs/certificates.yml
+    watch: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+    # Trust traffic from HAProxy L4 with ProxyProtocol
+    proxyProtocol:
+      trustedIPs: &trusted_ips
+        - "127.0.0.1/32"
+        - "10.0.0.0/8"
+        - "172.16.0.0/12"
+        - "192.168.0.0/16"
+    forwardedHeaders:
+      trustedIPs: *trusted_ips
+
+  websecure:
+    address: ":443"
+    # Trust traffic from HAProxy L4 with ProxyProtocol
+    proxyProtocol:
+      trustedIPs: *trusted_ips
+    forwardedHeaders:
+      trustedIPs: *trusted_ips
+
+  metrics:
+    address: ":8083"
+
+  ping:
+    address: ":8082"
+
+metrics:
+  prometheus:
+    entryPoint: metrics
+
+ping:
+  entryPoint: ping
+
+log:
+  level: INFO
+
+accessLog: {}
