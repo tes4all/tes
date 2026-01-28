@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM vaultwarden/server:1.35.2-alpine
 
 # Security: Create non-root user
@@ -16,6 +17,7 @@ USER 1000
 # Hardening: Set default environment variables
 # These are baked into the image but can be overridden
 ENV SIGNUPS_ALLOWED=false
+# check=skip=SecretsUsedInArgOrEnv
 ENV SHOW_PASSWORD_HINT=false
 ENV WEBSOCKET_ENABLED=true
 ENV ROCKET_WORKERS=10
