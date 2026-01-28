@@ -21,9 +21,9 @@ jobs:
             dockerfile: images/vaultwarden/Dockerfile
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
-    - uses: dorny/paths-filter@v2
+    - uses: dorny/paths-filter@v3
       id: changes
       with:
         filters: |
@@ -51,7 +51,7 @@ jobs:
 
     - name: Build and push
       if: steps.changes.outputs.src == 'true'
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         context: ${{ matrix.context }}
         file: ${{ matrix.dockerfile }}

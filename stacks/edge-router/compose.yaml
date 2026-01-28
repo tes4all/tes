@@ -190,7 +190,7 @@ services:
   # Valkey - State Store (Redis Protocol)
   # ===========================================
   valkey:
-    image: valkey/valkey:8.0.1-alpine
+    image: valkey/valkey:9-alpine
     command: valkey-server --appendonly yes --requirepass ${VALKEY_PASSWORD:-insecure_default}
     environment:
       - REDISCLI_AUTH=${VALKEY_PASSWORD:-insecure_default}
