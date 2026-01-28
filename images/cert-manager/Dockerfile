@@ -1,5 +1,5 @@
 # Stage 0: Get Lego
-FROM goacme/lego:v4.14.2 AS lego-source
+FROM goacme/lego:v4.31.0 AS lego-source
 
 # Stage 1: Build Python Venv
 FROM python:3.14-slim-trixie AS builder
