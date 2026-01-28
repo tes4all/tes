@@ -19,7 +19,15 @@ jobs:
           - image: vaultwarden
             context: images/vaultwarden
             dockerfile: images/vaultwarden/Dockerfile
-
+          - image: cert-manager
+            context: images/cert-manager
+            dockerfile: images/cert-manager/Dockerfile
+          - image: cert-syncer
+            context: images/cert-syncer
+            dockerfile: images/cert-syncer/Dockerfile
+          - image: edge-api
+            context: images/edge-api
+            dockerfile: images/edge-api/Dockerfile
     steps:
     - uses: actions/checkout@v6
 
