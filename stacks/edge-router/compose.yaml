@@ -93,7 +93,7 @@ services:
   # Traefik - L7 HTTP Reverse Proxy
   # ===========================================
   traefik:
-    image: tes4all/traefik:${TRAEFIK_VERSION:-3.6.6}
+    image: tes4all/traefik:${TRAEFIK_VERSION:-3.6.7}
     hostname: traefik-{{.Task.Slot}}
     command:
       # API & Dashboard
