@@ -3,9 +3,13 @@ services:
     ports:
       - "6379:6379"
   edge-api:
+    build:
+      context: ../../images/edge-api
     ports:
       - "8000:8000"
   cert-manager:
+    build:
+      context: ../../images/cert-manager
     environment:
       # Use a real provider name to trigger fast failure instead of interactive manual mode
       - LEGO_DNS_PROVIDER=infomaniak
