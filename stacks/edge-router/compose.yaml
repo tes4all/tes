@@ -79,6 +79,9 @@ services:
       - NODES=1
       - CONTAINERS=1 # Traefik needs this
       - EVENTS=1 # Cert Manager needs this
+      - INFO=1
+      - VERSION=1
+      - PING=1
     deploy:
       mode: global
       placement:

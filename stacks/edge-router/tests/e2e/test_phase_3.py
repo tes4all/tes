@@ -2,6 +2,7 @@ import pytest
 import httpx
 import time
 import os
+import python_on_whales
 from valkey import Valkey
 from python_on_whales import DockerClient
 
@@ -16,6 +17,13 @@ def docker_stack():
         "stacks/edge-router/compose.yaml",
         "stacks/edge-router/tests/e2e/compose.test.yaml"
     ])
+
+    # Ensure Swarm is active for Service tests
+    try:
+        docker.node.list()
+    except python_on_whales.exceptions.NotASwarmManager:
+        print("Swarm not active. Initializing Swarm...")
+        docker.swarm.init()
 
     print("Building images...")
     docker.compose.build(["valkey", "edge-api", "cert-manager", "cert-syncer", "traefik", "socket-proxy"])
