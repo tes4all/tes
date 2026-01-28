@@ -1,0 +1,25 @@
+services:
+  valkey:
+    ports:
+      - "6379:6379"
+  edge-api:
+    ports:
+      - "8000:8000"
+  cert-manager:
+    environment:
+      # Use a real provider name to trigger fast failure instead of interactive manual mode
+      - LEGO_DNS_PROVIDER=infomaniak
+      - INFOMANIAK_TOKEN=dummy
+
+  traefik:
+    user: root # Grant access to docker sock for tests
+    deploy:
+      replicas: 1
+
+  haproxy:
+    deploy:
+      replicas: 1
+
+networks:
+  edge-internal:
+    internal: false

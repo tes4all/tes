@@ -21,10 +21,6 @@ services:
         published: 443
         protocol: tcp
         mode: host
-      - target: 8405
-        published: 8405
-        protocol: tcp
-        mode: host
     cap_drop:
       - ALL
     cap_add:
@@ -68,29 +64,70 @@ services:
       - "prometheus.path=/metrics"
 
   # ===========================================
+  # Socket Proxy - Secure Access to Docker API
+  # ===========================================
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.4.2
+    networks:
+      - edge-internal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - SERVICES=1
+      - TASKS=1
+      - NETWORKS=1
+      - NODES=1
+      - CONTAINERS=1 # Traefik needs this
+      - EVENTS=1 # Cert Manager needs this
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 32M
+
+  # ===========================================
   # Traefik - L7 HTTP Reverse Proxy
   # ===========================================
   traefik:
     image: tes4all/traefik:${TRAEFIK_VERSION:-3.6.6}
     hostname: traefik-{{.Task.Slot}}
-    configs:
-      - source: traefik_static
-        target: /etc/traefik/traefik.yml
+    command:
+      # API & Dashboard
+      - "--api.dashboard=true"
+      # Providers
+      - "--providers.swarm.exposedByDefault=false"
+      - "--providers.swarm.endpoint=tcp://socket-proxy:2375"
+      - "--providers.redis.endpoints=valkey:6379"
+      - "--providers.redis.password=${VALKEY_PASSWORD:-insecure_default}"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      # EntryPoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.web.proxyProtocol.trustedIPs=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      - "--entrypoints.web.forwardedHeaders.trustedIPs=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.proxyProtocol.trustedIPs=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      - "--entrypoints.websecure.forwardedHeaders.trustedIPs=127.0.0.1/32,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+      - "--entrypoints.metrics.address=:8083"
+      - "--entrypoints.ping.address=:8082"
+      # Observability
+      - "--metrics.prometheus.entryPoint=metrics"
+      - "--ping.entryPoint=ping"
+      - "--log.level=INFO"
+      - "--accesslog=true"
     networks:
       - edge-internal
       - edge-external
-    ports:
-      - target: 8083 # Dashboard/Metrics
-        published: 8083
-        protocol: tcp
-        mode: host
-      - target: 8082 # Ping
-        published: 8082
-        protocol: tcp
-        mode: host
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - acme-data:/certs # Shared volume for certs
+      # - /var/run/docker.sock:/var/run/docker.sock:ro  <-- REMOVED, using proxy
+      - acme-data:/certs # Shared volume for certs (pem files)
+      - traefik-dynamic:/etc/traefik/dynamic # Shared dynamic config
     environment:
       - TZ=UTC
     cap_drop:
@@ -117,7 +154,7 @@ services:
       labels:
         # Enable Traefik to route itself (dashboard)
         - "traefik.enable=true"
-        - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
+        - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN:-localhost}`)"
         - "traefik.http.routers.traefik-dashboard.service=api@internal"
         - "traefik.http.routers.traefik-dashboard.entrypoints=web"
 
@@ -150,37 +187,112 @@ services:
         order: stop-first
 
   # ===========================================
+  # Valkey - State Store (Redis Protocol)
+  # ===========================================
+  valkey:
+    image: valkey/valkey:8.0.1-alpine
+    command: valkey-server --appendonly yes --requirepass ${VALKEY_PASSWORD:-insecure_default}
+    environment:
+      - REDISCLI_AUTH=${VALKEY_PASSWORD:-insecure_default}
+    networks:
+      - edge-internal
+    volumes:
+      - valkey-data:/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ===========================================
+  # Edge API - Control Plane
+  # ===========================================
+  edge-api:
+    image: tes4all/edge-router-api:${API_VERSION:-latest}
+    #build:
+    #  context: ../../images/edge-api
+    networks:
+      - edge-internal
+    environment:
+      - VALKEY_HOST=valkey
+      - VALKEY_PORT=6379
+      - VALKEY_PASSWORD=${VALKEY_PASSWORD:-insecure_default}
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ===========================================
   # Cert Manager - Lego Controller
   # ===========================================
   cert-manager:
-    image: goacme/lego:v4.14.2
-    entrypoint: ["/bin/sh", "/config/cert-manager.sh"]
+    image: tes4all/edge-router-cert-manager:${CERT_MANAGER_VERSION:-latest}
+    #build:
+    #  context: ../../images/cert-manager
     networks:
       - edge-internal
       - edge-external
-    configs:
-      - source: cert_manager_script
-        target: /config/cert-manager.sh
-        mode: 0555
     volumes:
       - acme-data:/certs
+      # - /var/run/docker.sock:/var/run/docker.sock:ro <-- REMOVED
     environment:
+      - DOCKER_HOST=tcp://socket-proxy:2375
+      - VALKEY_HOST=valkey
+      - VALKEY_PORT=6379
+      - VALKEY_PASSWORD=${VALKEY_PASSWORD:-insecure_default}
       - ACME_EMAIL=${ACME_EMAIL}
-
-      # DNS-01 Provider Config
-      # Set the provider name (e.g. infomaniak, route53, cloudflare)
-      - LEGO_DNS_PROVIDER=${LEGO_DNS_PROVIDER:-infomaniak}
-
-      # Configuration for the script
-      - DOMAINS_WILDCARD=${DOMAINS_WILDCARD} # e.g. "my-company.com"
-      - DOMAINS_CUSTOMER=${DOMAINS_CUSTOMER} # e.g. "foo.client.com,bar.client.com"
-      - LEGO_SERVER=${LEGO_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      - ACME_CHALLENGE_TYPE=${ACME_CHALLENGE_TYPE:-dns} # dns or http
+      - LEGO_DNS_PROVIDER=${LEGO_DNS_PROVIDER:-manual} # e.g. route53, infomaniak, cloudflare
+      - LEGO_SERVER=${LEGO_SERVER:-https://acme-staging-v02.api.letsencrypt.org/directory}
+      # Provider specific Credentials (pass via .env)
+      # - INFOMANIAK_USERNAME=${INFOMANIAK_USERNAME}
+      # - INFOMANIAK_PASSWORD=${INFOMANIAK_PASSWORD}
+      - DOMAINS_WILDCARD=${DOMAINS_WILDCARD}
     deploy:
       mode: replicated
       replicas: 1
       placement:
         constraints:
           - node.role == manager
+
+  # ===========================================
+  # Cert Syncer - Generator for Traefik Config
+  # ===========================================
+  cert-syncer:
+    image: tes4all/edge-router-cert-syncer:${CERT_MANAGER_VERSION:-latest}
+    build:
+      context: ../../images/cert-syncer
+    networks:
+      - edge-internal
+    volumes:
+      - acme-data:/certs
+      - traefik-dynamic:/etc/traefik/dynamic
+    environment:
+      - VALKEY_HOST=valkey
+      - VALKEY_PORT=6379
+      - VALKEY_PASSWORD=${VALKEY_PASSWORD:-insecure_default}
+      - TRAEFIK_DYNAMIC_CONFIG_FILE=/etc/traefik/dynamic/certificates.yml
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 networks:
   edge-internal:
@@ -191,9 +303,9 @@ networks:
 volumes:
   acme-data:
     driver: local
+  traefik-dynamic:
+    driver: local
+  valkey-data:
+    driver: local
 
-configs:
-  cert_manager_script:
-    file: ./config/cert-manager.sh
-  traefik_static:
-    file: ./config/traefik.yaml
+

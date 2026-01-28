@@ -1,0 +1,46 @@
+name: Edge Router CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'stacks/edge-router/**'
+      - 'images/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'stacks/edge-router/**'
+      - 'images/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -r stacks/edge-router/tests/e2e/requirements.txt
+
+      - name: Build Stack
+        run: |
+          docker compose -f stacks/edge-router/compose.yaml -f stacks/edge-router/tests/e2e/compose.test.yaml build
+
+      - name: Run E2E Tests
+        run: |
+          pytest stacks/edge-router/tests/e2e/test_phase_3.py
+        env:
+          PYTHON_ON_WHALES_DEBUG: "1"
+
+      - name: Dump Logs on Failure
+        if: failure()
+        run: |
+          docker compose -f stacks/edge-router/compose.yaml -f stacks/edge-router/tests/e2e/compose.test.yaml logs
