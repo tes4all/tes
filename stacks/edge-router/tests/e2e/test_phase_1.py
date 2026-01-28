@@ -25,9 +25,9 @@ def docker_stack():
         "stacks/edge-router/tests/e2e/compose.test.yaml"
     ])
     # Build the image first
-    print("Building Edge API image...")
+    print("Building Edge Router API image...")
     docker.build(
-            context_path="images/edge-api",
+            context_path="images/edge-router-api",
     )
 
     # We use a simplified compose for testing Phase 1 to avoid starting
@@ -37,7 +37,7 @@ def docker_stack():
     # Using 'docker compose' project for isolated test environment
     # instead of swarm stack for unit/integration speed if possible,
     # but requirement said "Swarm". Let's stick to compose up for integration.
-    docker.compose.up(["valkey", "edge-api"], detach=True)
+    docker.compose.up(["valkey", "edge-router-api"], detach=True)
 
     # Wait for healthchecks
     print("Waiting for services to be ready...")

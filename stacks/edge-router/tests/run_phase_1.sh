@@ -16,7 +16,7 @@ else
 fi
 
 echo "Starting Phase 1 Test Stack..."
-docker compose -f stacks/edge-router/compose.yaml -f stacks/edge-router/tests/e2e/compose.test.yaml up -d --build valkey edge-api
+docker compose -f stacks/edge-router/compose.yaml -f stacks/edge-router/tests/e2e/compose.test.yaml up -d --build valkey edge-router-api
 
 echo "Waiting for healthchecks (10s)..."
 sleep 10
@@ -27,8 +27,8 @@ echo "Running Tests..."
 # For strict CI, fail is fine. For dev, maybe user wants to debug.
 pytest stacks/edge-router/tests/e2e/test_phase_1.py || {
     echo "Tests Failed!"
-    echo "Logs Edge-API:"
-    docker compose -f stacks/edge-router/compose.yaml -f stacks/edge-router/tests/e2e/compose.test.yaml logs edge-api
+    echo "Logs Edge-Router-API:"
+    docker compose -f stacks/edge-router/compose.yaml -f stacks/edge-router/tests/e2e/compose.test.yaml logs edge-router-api
     exit 1
 }
 

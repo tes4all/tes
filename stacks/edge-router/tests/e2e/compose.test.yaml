@@ -2,9 +2,9 @@ services:
   valkey:
     ports:
       - "6379:6379"
-  edge-api:
+  edge-router-api:
     build:
-      context: ../../images/edge-api
+      context: ../../images/edge-router-api
     ports:
       - "8000:8000"
   cert-manager:

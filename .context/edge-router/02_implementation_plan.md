@@ -2,7 +2,7 @@
 
 ## Phase 1: Foundation (Valkey & API)
 1.  **Valkey Service**: Add to `compose.yaml` with persistence.
-2.  **API Service**: Build `images/edge-api` (FastAPI).
+2.  **API Service**: Build `images/edge-router-api` (FastAPI).
     *   Implement Pydantic models for Domain/Route.
     *   Implement Valkey connectivity.
 3.  **Test**: Verify API writes keys to Valkey.

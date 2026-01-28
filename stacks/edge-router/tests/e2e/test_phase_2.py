@@ -18,10 +18,10 @@ def docker_stack():
     # But here we use docker.build which is for a single image, OR docker.compose.build.
     # User's run script uses `docker compose up --build`.
     # Let's use docker.compose.build()
-    docker.compose.build(["valkey", "edge-api", "cert-manager"])
+    docker.compose.build(["valkey", "edge-router-api", "cert-manager"])
 
     print("Starting Phase 2 Stack...")
-    docker.compose.up(["valkey", "edge-api", "cert-manager"], detach=True)
+    docker.compose.up(["valkey", "edge-router-api", "cert-manager"], detach=True)
 
     # Wait for startup
     time.sleep(10)

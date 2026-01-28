@@ -14,10 +14,10 @@ on:
           - all
           - haproxy
           - traefik
-          - vaultwarden
           - cert-manager
           - cert-syncer
-          - edge-api
+          - edge-router-api
+          - vaultwarden
 
 jobs:
   build:
@@ -31,18 +31,18 @@ jobs:
           - image: traefik
             context: images/traefik
             dockerfile: images/traefik/Dockerfile
-          - image: vaultwarden
-            context: images/vaultwarden
-            dockerfile: images/vaultwarden/Dockerfile
           - image: cert-manager
             context: images/cert-manager
             dockerfile: images/cert-manager/Dockerfile
           - image: cert-syncer
             context: images/cert-syncer
             dockerfile: images/cert-syncer/Dockerfile
-          - image: edge-api
-            context: images/edge-api
-            dockerfile: images/edge-api/Dockerfile
+          - image: edge-router-api
+            context: images/edge-router-api
+            dockerfile: images/edge-router-api/Dockerfile
+          - image: vaultwarden
+            context: images/vaultwarden
+            dockerfile: images/vaultwarden/Dockerfile
     steps:
     - uses: actions/checkout@v6
       with:
@@ -79,7 +79,11 @@ jobs:
       if: steps.check.outputs.should_build == 'true'
       id: meta
       run: |
-        VERSION=$(grep -m1 '^FROM ' ${{ matrix.dockerfile }} | awk '{print $2}' | awk -F: '{print $NF}')
+        if [ -f "${{ matrix.context }}/VERSION" ]; then
+          VERSION=$(head -n 1 ${{ matrix.context }}/VERSION | tr -d '[:space:]')
+        else
+          VERSION=$(grep -m1 '^FROM ' ${{ matrix.dockerfile }} | awk '{print $2}' | awk -F: '{print $NF}')
+        fi
         echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
     - name: Login to Docker Hub
@@ -97,6 +101,7 @@ jobs:
         file: ${{ matrix.dockerfile }}
         push: ${{ github.event_name != 'pull_request' }}
         tags: |
-          ${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+          ${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.image }}:${{ steps.meta.outputs.version }}
+          ${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.image }}:latest
           ${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.image }}:${{ steps.meta.outputs.version }}
           ${{ secrets.DOCKER_HUB_USERNAME }}/${{ matrix.image }}:latest

@@ -26,10 +26,10 @@ def docker_stack():
         docker.swarm.init()
 
     print("Building images...")
-    docker.compose.build(["valkey", "edge-api", "cert-manager", "cert-syncer", "traefik", "socket-proxy"])
+    docker.compose.build(["valkey", "edge-router-api", "cert-manager", "cert-syncer", "traefik", "socket-proxy"])
 
     print("Starting Phase 3 Stack (including Traefik & Syncer)...")
-    docker.compose.up(["valkey", "edge-api", "cert-manager", "cert-syncer", "traefik", "socket-proxy"], detach=True)
+    docker.compose.up(["valkey", "edge-router-api", "cert-manager", "cert-syncer", "traefik", "socket-proxy"], detach=True)
 
     time.sleep(15)
 

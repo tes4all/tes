@@ -12,7 +12,7 @@
 *   **Channels (Pub/Sub)**:
     *   `events/certs_updated`: Payload `{ "domain": "example.com", "action": "upsert" }`
 
-### 2. Edge API (`edge-api`)
+### 2. Edge API (`edge-router-api`)
 *   **Image**: Custom (Python 3.14 + FastAPI)
 *   **Role**: Control Plane.
 *   **Endpoints**:
