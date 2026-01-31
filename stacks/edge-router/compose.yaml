@@ -1,6 +1,64 @@
 # Edge Router Stack - HAProxy L4 + Traefik L7
 # Golden Stack - Production Hardened, Swarm-Ready
 services:
+
+  # ===========================================
+  # Socket Proxy - Secure Access to Docker API
+  # ===========================================
+  socket-proxy:
+    image: tes4all/edge-router-socket-proxy:${SOCKET_PROXY_VERSION:-0.4.2-tes-upstream-patched}
+    networks:
+      - edge-internal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - SERVICES=1
+      - TASKS=1
+      - NETWORKS=1
+      - NODES=1
+      - CONTAINERS=1 # Traefik needs this
+      - EVENTS=1 # Cert Manager needs this
+      - INFO=1
+      - VERSION=1
+      - PING=1
+      - SWARM=1
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 32M
+  # ===========================================
+  # Valkey - State Store (Redis Protocol)
+  # ===========================================
+  valkey:
+    image: valkey/valkey:9-alpine
+    command: valkey-server --appendonly yes --requirepass ${VALKEY_PASSWORD:-insecure_default}
+    # Fix for "Memory overcommit" warning:
+    # This requires host-level configuration and cannot be fixed at the container level.
+    # Run 'sysctl vm.overcommit_memory=1' on the host system (and add to /etc/sysctl.conf).
+    sysctls:
+      - net.core.somaxconn=1024 # Fix "TCP backlog" warning
+    environment:
+      - REDISCLI_AUTH=${VALKEY_PASSWORD:-insecure_default}
+    networks:
+      - edge-internal
+    volumes:
+      - valkey-data:/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$REDISCLI_AUTH\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   # ===========================================
   # HAProxy - L4 TCP Load Balancer (Global Mode)
   # ===========================================
@@ -61,35 +119,6 @@ services:
       - "prometheus.port=8405"
       - "prometheus.path=/metrics"
 
-  # ===========================================
-  # Socket Proxy - Secure Access to Docker API
-  # ===========================================
-  socket-proxy:
-    image: tes4all/edge-router-socket-proxy:${SOCKET_PROXY_VERSION:-0.4.2-tes-upstream-patched}
-    networks:
-      - edge-internal
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - SERVICES=1
-      - TASKS=1
-      - NETWORKS=1
-      - NODES=1
-      - CONTAINERS=1 # Traefik needs this
-      - EVENTS=1 # Cert Manager needs this
-      - INFO=1
-      - VERSION=1
-      - PING=1
-      - SWARM=1
-    deploy:
-      mode: global
-      placement:
-        constraints:
-          - node.role == manager
-      resources:
-        limits:
-          cpus: "0.1"
-          memory: 32M
 
   # ===========================================
   # Traefik - L7 HTTP Reverse Proxy
@@ -188,33 +217,6 @@ services:
         failure_action: rollback
         order: stop-first
 
-  # ===========================================
-  # Valkey - State Store (Redis Protocol)
-  # ===========================================
-  valkey:
-    image: valkey/valkey:9-alpine
-    command: valkey-server --appendonly yes --requirepass ${VALKEY_PASSWORD:-insecure_default}
-    # Fix for "Memory overcommit" warning:
-    # This requires host-level configuration and cannot be fixed at the container level.
-    # Run 'sysctl vm.overcommit_memory=1' on the host system (and add to /etc/sysctl.conf).
-    sysctls:
-      - net.core.somaxconn=1024 # Fix "TCP backlog" warning
-    environment:
-      - REDISCLI_AUTH=${VALKEY_PASSWORD:-insecure_default}
-    networks:
-      - edge-internal
-    volumes:
-      - valkey-data:/data
-    deploy:
-      mode: replicated
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-    healthcheck:
-      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
   # ===========================================
   # Edge API - Control Plane
@@ -311,6 +313,3 @@ volumes:
     driver: local
   valkey-data:
     driver: local
-
-
-
