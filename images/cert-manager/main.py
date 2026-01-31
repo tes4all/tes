@@ -316,8 +316,36 @@ def reconcile_targets(v):
     """
     Syncs the Source-of-Truth SET with the Scheduler ZSET.
     Ensures newly added domains are scheduled immediately.
+    Also cleans up domains covered by wildcard roots or invalid domains.
     """
     try:
+        targets = v.smembers(KEY_TARGETS)
+
+        # Cleanup loop
+        for t in targets:
+            # 1. Cleanup local/invalid domains that might have slipped in
+            if t.endswith((".localhost", ".local", ".lokal")):
+                logger.info(f"Removing {t} from targets (local domain)")
+                v.srem(KEY_TARGETS, t)
+                v.zrem(KEY_SCHEDULE, t)
+                v.hdel(KEY_META, t)
+                v.hdel(KEY_CONFIG, t)
+                continue
+
+            # 2. Cleanup targets covered by wildcard (unless it is the root itself)
+            if t in WILDCARD_ROOTS:
+                continue
+
+            for root in WILDCARD_ROOTS:
+                if t.endswith(f".{root}"):
+                    logger.info(f"Removing {t} from targets as it is covered by wildcard {root}")
+                    v.srem(KEY_TARGETS, t)
+                    v.zrem(KEY_SCHEDULE, t)
+                    v.hdel(KEY_META, t)
+                    v.hdel(KEY_CONFIG, t)
+                    break
+
+        # Refresh targets list after cleanup
         targets = v.smembers(KEY_TARGETS)
         scheduled = v.zrange(KEY_SCHEDULE, 0, -1)
 
