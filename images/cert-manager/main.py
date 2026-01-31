@@ -8,6 +8,7 @@ import datetime
 import re
 import threading
 import docker
+import shlex
 from valkey import Valkey
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -46,15 +47,19 @@ CERTS_DIR = "/certs"
 KEY_SCHEDULE = "cert_schedule"   # ZSET: domain -> timestamp (next check)
 KEY_META = "cert_meta"           # HASH: domain -> json (errors, last_attempt)
 KEY_TARGETS = "target_domains"   # SET: configured domains (source of truth)
+KEY_CONFIG = "cert_config"       # HASH: domain -> json (challenge_type, etc)
 
 # Acme Config
 ACME_EMAIL = os.getenv("ACME_EMAIL", "")
 ACME_CHALLENGE_TYPE = os.getenv("ACME_CHALLENGE_TYPE", "dns") # "dns" or "http"
+ACME_HTTP_DOMAINS = [d.strip() for d in os.getenv("ACME_HTTP_DOMAINS", "").split(",") if d.strip()]
 LEGO_DNS_PROVIDER = os.getenv("LEGO_DNS_PROVIDER", "manual")
 LEGO_SERVER = os.getenv("LEGO_SERVER", "https://acme-v02.api.letsencrypt.org/directory")
+LEGO_EXTRA_ARGS = os.getenv("LEGO_EXTRA_ARGS", "")
 
 # Static Config
 DOMAINS_WILDCARD = os.getenv("DOMAINS_WILDCARD", "")
+WILDCARD_ROOTS = [d.strip() for d in DOMAINS_WILDCARD.split(",") if d.strip()]
 
 # Docker Client
 try:
@@ -123,11 +128,36 @@ def schedule_domain(v, domain, timestamp):
     v.zadd(KEY_SCHEDULE, {domain: timestamp})
     logger.debug(f"Scheduled {domain} for {datetime.datetime.fromtimestamp(timestamp)}")
 
-def issue_cert(domain):
+def resolve_challenge_type(v, domain):
+    """
+    Determines challenge type for a domain.
+    Priority:
+    1. ACME_HTTP_DOMAINS env var (Force HTTP)
+    2. Redis KEY_CONFIG (Populated by Docker Labels)
+    3. ACME_CHALLENGE_TYPE env var (Default)
+    """
+    if domain in ACME_HTTP_DOMAINS:
+        return "http"
+
+    try:
+        config_raw = v.hget(KEY_CONFIG, domain)
+        if config_raw:
+            config = json.loads(config_raw)
+            if "challenge" in config:
+                return config["challenge"]
+    except Exception:
+        pass
+
+    return ACME_CHALLENGE_TYPE
+
+def issue_cert(v, domain):
     """
     Runs Lego. Returns (success: bool, output: str).
     """
     logger.info(f"Attempting to issue/renew certificate for {domain}")
+
+    challenge_type = resolve_challenge_type(v, domain)
+    logger.info(f"Using challenge type: {challenge_type} for {domain}")
 
     cmd = [
         "lego",
@@ -138,7 +168,15 @@ def issue_cert(domain):
         "--accept-tos"
     ]
 
-    if ACME_CHALLENGE_TYPE == "http":
+    if LEGO_EXTRA_ARGS:
+        cmd.extend(shlex.split(LEGO_EXTRA_ARGS))
+
+    # Add wildcard domain if this is a wildcard root
+    if domain in WILDCARD_ROOTS:
+        cmd.append("--domains")
+        cmd.append(f"*.{domain}")
+
+    if challenge_type == "http":
         cmd.append("--http")
         cmd.append("--http.port")
         cmd.append(":8080")
@@ -183,6 +221,9 @@ def reconcile_env_vars(v):
 
     domains = [d.strip() for d in DOMAINS_WILDCARD.split(',') if d.strip()]
     for d in domains:
+        if d.endswith((".localhost", ".local", ".lokal")):
+            continue
+
         # For wildcards, we just manage the root domain for certificate issuance logic,
         # usually checks '*.' + d or just 'd'. The cert filenames are 'd.crt'.
         # Legacy script used the domain string directly.
@@ -203,6 +244,10 @@ def scan_docker_services(v):
 
         for service in services:
             labels = service.attrs.get('Spec', {}).get('Labels', {})
+
+            # Check for override label for this service
+            svc_challenge = labels.get("cert-manager.challenge", None)
+
             for key, value in labels.items():
                 # Look for traefik.http.routers.<name>.rule
                 # This matches: traefik.http.routers.my-app.rule = Host(`foo.com`)
@@ -217,8 +262,19 @@ def scan_docker_services(v):
                         parts = match.split(",")
                         for part in parts:
                             d = part.strip().strip("`'\"")
-                            if d:
-                                found_domains.add(d)
+                            if d and not d.endswith((".localhost", ".local", ".lokal")):
+                                # Check if covered by wildcard
+                                is_covered = False
+                                for root in WILDCARD_ROOTS:
+                                    if d.endswith(f".{root}"):
+                                        is_covered = True
+                                        break
+
+                                if not is_covered:
+                                    found_domains.add(d)
+                                    # Store config if specific challenge set
+                                    if svc_challenge:
+                                         v.hset(KEY_CONFIG, d, json.dumps({"challenge": svc_challenge}))
 
         # Sync to Redis
         for d in found_domains:
@@ -295,7 +351,7 @@ def process_due_domains(v):
 
     domain = items[0]
 
-    success, output = issue_cert(domain)
+    success, output = issue_cert(v, domain)
 
     if success:
         # Publish to Valkey for Syncers

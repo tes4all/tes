@@ -14,7 +14,7 @@ RUN uv venv .venv && \
 
 FROM python:3.14-slim-trixie
 
-RUN apt-get update && apt-get -y upgrade && apt-get install -y apt-transport-https && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get -y upgrade && apt-get install -y apt-transport-https curl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /packages/.venv /opt/venv
 

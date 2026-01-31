@@ -38,6 +38,39 @@ def docker_stack():
     print("Tearing down...")
     docker.compose.down(volumes=True)
 
+def test_api_health(docker_stack):
+    """
+    Verify Edge Router API is reachable and healthy.
+    This also ensures the container image has the necessary tools (like curl) for its internal healthcheck.
+    """
+    print("Checking API Health via HTTP...")
+
+    # Check if the API responds to HTTP requests
+    try:
+        response = httpx.get(f"{API_URL}/health", timeout=5.0)
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+    except httpx.ConnectError:
+        pytest.fail("Could not connect to Edge Router API at http://localhost:8000")
+
+    # Check Docker Healthcheck Status
+    print("Checking Container Health Status...")
+    api_container = docker_stack.compose.ps(services=["edge-router-api"])[0]
+
+    # We allow some time for the healthcheck to run if it's still starting
+    # But usually the sleep(15) in fixture is enough for the first check
+    inspect = docker_stack.container.inspect(api_container.id)
+    health_status = inspect.state.health.status
+
+    # If it's starting, that's "okay" safely, but "unhealthy" is a failure.
+    if health_status == "unhealthy":
+         # dump logs to concise reason
+         log_out = docker_stack.compose.logs(services=["edge-router-api"])
+         print(f"Container logs:\n{log_out}")
+         pytest.fail(f"Container {api_container.name} is marked unhealthy. (Missing curl?)")
+
+    print(f"API Health Status: {health_status}")
+
 def test_cert_syncer_flow(docker_stack):
     """
     Test that Cert Syncer generates Traefik config when certs appear in Valkey.

@@ -195,6 +195,11 @@ services:
   valkey:
     image: valkey/valkey:9-alpine
     command: valkey-server --appendonly yes --requirepass ${VALKEY_PASSWORD:-insecure_default}
+    # Fix for "Memory overcommit" warning:
+    # This requires host-level configuration and cannot be fixed at the container level.
+    # Run 'sysctl vm.overcommit_memory=1' on the host system (and add to /etc/sysctl.conf).
+    sysctls:
+      - net.core.somaxconn=1024 # Fix "TCP backlog" warning
     environment:
       - REDISCLI_AUTH=${VALKEY_PASSWORD:-insecure_default}
     networks:
@@ -217,8 +222,6 @@ services:
   # ===========================================
   edge-router-api:
     image: tes4all/edge-router-api:${EDGE_API_VERSION:-1.0.0}
-    #build:
-    #  context: ../../images/edge-router-api
     networks:
       - edge-internal
     environment:
@@ -256,6 +259,7 @@ services:
       - ACME_CHALLENGE_TYPE=${ACME_CHALLENGE_TYPE:-dns} # dns or http
       - LEGO_DNS_PROVIDER=${LEGO_DNS_PROVIDER:-manual} # e.g. route53, infomaniak, cloudflare
       - LEGO_SERVER=${LEGO_SERVER:-https://acme-staging-v02.api.letsencrypt.org/directory}
+      - LEGO_EXTRA_ARGS=${LEGO_EXTRA_ARGS:---dns.resolvers 9.9.9.9:53}
       # Provider specific Credentials (pass via .env)
       # - INFOMANIAK_USERNAME=${INFOMANIAK_USERNAME}
       # - INFOMANIAK_PASSWORD=${INFOMANIAK_PASSWORD}
