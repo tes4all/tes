@@ -1,7 +1,5 @@
 # Edge Router Stack - HAProxy L4 + Traefik L7
 # Golden Stack - Production Hardened, Swarm-Ready
-name: edge-router
-
 services:
   # ===========================================
   # HAProxy - L4 TCP Load Balancer (Global Mode)
@@ -67,7 +65,7 @@ services:
   # Socket Proxy - Secure Access to Docker API
   # ===========================================
   socket-proxy:
-    image: tes4all/edge-router-socket-proxy:${SOCKET_PROXY_VERSION:-0.4.2-tes-1}
+    image: tes4all/edge-router-socket-proxy:${SOCKET_PROXY_VERSION:-0.4.2-tes-2}
     networks:
       - edge-internal
     volumes:
