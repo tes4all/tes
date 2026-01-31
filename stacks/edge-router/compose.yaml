@@ -67,7 +67,7 @@ services:
   # Socket Proxy - Secure Access to Docker API
   # ===========================================
   socket-proxy:
-    image: tecnativa/docker-socket-proxy:v0.4.2
+    image: tes4all/edge-router-socket-proxy:${SOCKET_PROXY_VERSION:-0.4.2-tes-1}
     networks:
       - edge-internal
     volumes:
@@ -312,5 +312,6 @@ volumes:
     driver: local
   valkey-data:
     driver: local
+
 
 

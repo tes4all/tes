@@ -15,6 +15,10 @@ services:
       - LEGO_DNS_PROVIDER=infomaniak
       - INFOMANIAK_TOKEN=dummy
 
+  socket-proxy:
+    build:
+      context: ../../images/socket-proxy
+
   traefik:
     user: root # Grant access to docker sock for tests
     deploy:

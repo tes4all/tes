@@ -17,6 +17,7 @@ on:
           - cert-manager
           - cert-syncer
           - edge-router-api
+          - edge-router-socket-proxy
           - vaultwarden
 
 jobs:
@@ -40,6 +41,9 @@ jobs:
           - image: edge-router-api
             context: images/edge-router-api
             dockerfile: images/edge-router-api/Dockerfile
+          - image: edge-router-socket-proxy
+            context: images/socket-proxy
+            dockerfile: images/socket-proxy/Dockerfile
           - image: vaultwarden
             context: images/vaultwarden
             dockerfile: images/vaultwarden/Dockerfile
