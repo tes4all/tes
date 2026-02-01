@@ -15,4 +15,12 @@ if [ -d "/certs" ]; then
     chown -R appuser:appuser /certs
 fi
 
+# Fix permissions for Traefik dynamic config directory if variable is set
+if [ -n "$TRAEFIK_DYNAMIC_CONFIG_FILE" ]; then
+    CONFIG_DIR=$(dirname "$TRAEFIK_DYNAMIC_CONFIG_FILE")
+    if [ -d "$CONFIG_DIR" ]; then
+        chown -R appuser:appuser "$CONFIG_DIR"
+    fi
+fi
+
 exec gosu appuser "$@"

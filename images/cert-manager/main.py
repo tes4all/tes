@@ -181,6 +181,16 @@ def issue_cert(v, domain):
         cmd.append("--http.port")
         cmd.append(":8080")
     else:
+        # Check for manual provider in non-interactive mode
+        if LEGO_DNS_PROVIDER == "manual":
+            msg = (
+                "Configuration Error: LEGO_DNS_PROVIDER is set to 'manual' (default). "
+                "This requires interactive input (stdin) which is not available in background containers. "
+                "Please configure a valid DNS provider (e.g. route53, cloudflare) via LEGO_DNS_PROVIDER and associated credentials."
+            )
+            logger.error(f"Lego failed for {domain}: {msg}")
+            return False, msg
+
         cmd.append("--dns")
         cmd.append(LEGO_DNS_PROVIDER)
 
