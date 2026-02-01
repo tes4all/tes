@@ -92,6 +92,7 @@ services:
       start_period: 5s
     deploy:
       mode: global
+      endpoint_mode: dnsrr
       placement:
         constraints:
           - node.role == manager
@@ -177,6 +178,7 @@ services:
     deploy:
       mode: replicated
       replicas: 3
+      endpoint_mode: dnsrr
       placement:
         constraints:
           - node.role == manager
@@ -268,6 +270,7 @@ services:
     deploy:
       mode: replicated
       replicas: 1
+      endpoint_mode: dnsrr
       placement:
         constraints:
           - node.role == manager
@@ -306,55 +309,12 @@ services:
       timeout: 10s
       retries: 3
 
-  # ===========================================
-  # Debugger - Connectivity Probe
-  # ===========================================
-  debug-connectivity:
-    image: valkey/valkey:9-alpine
-    networks:
-      - edge-internal
-    deploy:
-      mode: global
-    command: >
-      sh -c '
-        echo "Starting Debugger...";
-        while true; do
-          timestamp=$$(date +"%H:%M:%S");
-
-          # --- Check Valkey ---
-          if getent hosts valkey > /dev/null; then
-             if valkey-cli -h valkey -a "$$REDISCLI_AUTH" ping > /dev/null 2>&1; then
-               echo "[$$timestamp] VALKEY: OK (DNS+APP)";
-             else
-               echo "[$$timestamp] VALKEY: FAIL (TCP/AUTH) - DNS resolved";
-             fi
-          else
-            echo "[$$timestamp] VALKEY: FAIL (DNS lookup failed)";
-          fi
-
-          # --- Check Socket Proxy ---
-          if getent hosts socket-proxy > /dev/null; then
-             # Try simple TCP connect with timeout if nc exists, else just report DNS ok
-             if nc -z -w 1 socket-proxy 2375 2>/dev/null; then
-               echo "[$$timestamp] DOCKER: OK (DNS+TCP)";
-             else
-               echo "[$$timestamp] DOCKER: FAIL (TCP) - DNS resolved";
-             fi
-          else
-             echo "[$$timestamp] DOCKER: FAIL (DNS lookup failed)";
-          fi
-
-          sleep 1;
-        done
-      '
-    environment:
-      - REDISCLI_AUTH=${VALKEY_PASSWORD:-insecure_default}
-
 networks:
   edge-internal:
     internal: true
   edge-external:
-    attachable: true
+    name: edge-external
+    external: true
 
 volumes:
   acme-data:

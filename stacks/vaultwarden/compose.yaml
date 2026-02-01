@@ -1,12 +1,9 @@
-name: vaultwarden
-
 services:
   vaultwarden:
     image: tes4all/vaultwarden:${VAULTWARDEN_VERSION:-1.35.2-alpine}
     networks:
-      - default
-      # Uncomment to use external edge router
-      # - edge-router-net
+      - db-internal
+      - proxy-public
       # Uncomment to use external postgres
       # - postgres-ha
     ports:
@@ -26,10 +23,6 @@ services:
       - ROCKET_PORT=8080
     volumes:
       - vaultwarden-data:/data
-    depends_on:
-      db:
-        condition: service_healthy
-        required: false # Allow starting without internal DB if configured externally
     deploy:
       replicas: 1
       restart_policy:
@@ -44,22 +37,24 @@ services:
       labels:
         # Edge Router (Traefik) Configuration
         - "traefik.enable=true"
-        - "traefik.http.routers.vaultwarden.rule=Host(`vault.example.com`)"
+        - "traefik.http.routers.vaultwarden.rule=Host(`${VAULTWARDEN_DOMAIN:-vault.example.com}`)"
         - "traefik.http.routers.vaultwarden.entrypoints=websecure"
         - "traefik.http.services.vaultwarden.loadbalancer.server.port=8080"
+        - "traefik.http.routers.vaultwarden.service=vaultwarden"
+        - "traefik.http.routers.vaultwarden.tls=true"
         # WebSocket Configuration
-        - "traefik.http.routers.vaultwarden-ws.rule=Host(`vault.example.com`) && Path(`/notifications/hub`)"
+        - "traefik.http.routers.vaultwarden-ws.rule=Host(`${VAULTWARDEN_DOMAIN:-vault.example.com}`) && Path(`/notifications/hub`)"
         - "traefik.http.routers.vaultwarden-ws.entrypoints=websecure"
+        - "traefik.http.routers.vaultwarden-ws.service=vaultwarden-ws"
+        - "traefik.http.routers.vaultwarden-ws.tls=true"
         - "traefik.http.services.vaultwarden-ws.loadbalancer.server.port=3012"
+        - "traefik.swarm.network=${TRAEFIK_NETWORK:-edge-external}"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/alive"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-    # Security Hardening
-    security_opt:
-      - no-new-privileges:true
     read_only: true
     tmpfs:
       - /tmp
@@ -72,9 +67,7 @@ services:
         max-file: "3"
 
   db:
-    profiles: [postgres]
     image: postgres:15-alpine
-    restart: always
     volumes:
       - db-data:/var/lib/postgresql/data
     environment:
@@ -82,7 +75,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret}
       - POSTGRES_DB=${POSTGRES_DB:-vaultwarden}
     networks:
-      - default
+      - db-internal
     deploy:
       resources:
         limits:
@@ -96,12 +89,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    # Security Hardening
-    security_opt:
-      - no-new-privileges:true
-    # Postgres needs write access to /var/lib/postgresql/data (volume) and /run/postgresql (tmpfs usually)
-    # read_only: true # Can be tricky with postgres images without careful tmpfs config
-    shm_size: 128mb
     logging:
       driver: "json-file"
       options:
@@ -109,9 +96,14 @@ services:
         max-file: "3"
 
 networks:
-  default:
-  # edge-router-net:
-  #   external: true
+  # Network communicating with Traefik
+  proxy-public:
+    external: true
+    name: ${TRAEFIK_NETWORK:-edge-external}
+  # Private network between Vaultwarden and DB
+  db-internal:
+    driver: overlay
+    attachable: false
 
 volumes:
   vaultwarden-data:
