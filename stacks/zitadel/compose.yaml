@@ -1,142 +1,163 @@
 services:
   zitadel:
+    image: ghcr.io/zitadel/zitadel:v4.10.1
+    # Hardening: Run as non-root
+    user: "1000"
+    command: start-from-init --masterkeyFile /run/secrets/zitadel_masterkey #--config /zitadel.yaml
     deploy:
       mode: replicated
       replicas: 1
+      restart_policy:
+        condition: on-failure
       labels:
         - "traefik.enable=true"
         - "traefik.swarm.network=${TRAEFIK_NETWORK:-edge-external}"
-        # Router: Zitadel Main
-        - "traefik.http.routers.zitadel.rule=Host(`${ZITADEL_HOSTNAME:-auth.example.com}`) && !PathPrefix(`/ui/v2/login`)"
+
+        # --- Router: Main API & Console (HTTP/2) ---
+        - "traefik.http.routers.zitadel.rule=Host(`${ZITADEL_HOSTNAME}`)"
         - "traefik.http.routers.zitadel.entrypoints=websecure"
-        - "traefik.http.routers.zitadel.service=zitadel"
-        # Service: Zitadel Main (HTTP/2 on Port 8080)
-        - "traefik.http.services.zitadel.loadbalancer.server.port=8080"
-        - "traefik.http.services.zitadel.loadbalancer.server.scheme=h2c"
+        - "traefik.http.routers.zitadel.tls=true"
+        - "traefik.http.routers.zitadel.service=zitadel-core"
 
-    restart: unless-stopped
-    image: ghcr.io/zitadel/zitadel:latest
-    command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}"
+        # --- Service: Core (h2c for gRPC support) ---
+        - "traefik.http.services.zitadel-core.loadbalancer.server.port=8080"
+        - "traefik.http.services.zitadel-core.loadbalancer.server.scheme=h2c"
+
     environment:
-      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_HOSTNAME:-auth.example.com}
-      ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNALPORT:-443}
-      ZITADEL_EXTERNALSECURE: "${ZITADEL_EXTERNALSECURE:-true}"
-      ZITADEL_TLS_ENABLED: "false"
+      # --- Networking ---
+      - ZITADEL_EXTERNALDOMAIN=${ZITADEL_HOSTNAME}
+      - ZITADEL_EXTERNALPORT=443
+      - ZITADEL_EXTERNALSECURE=true
+      - ZITADEL_TLS_ENABLED=false
 
-      # Database connection settings.
-      ZITADEL_DATABASE_POSTGRES_HOST: db
-      ZITADEL_DATABASE_POSTGRES_PORT: 5432
-      ZITADEL_DATABASE_POSTGRES_DATABASE: ${ZITADEL_DATABASE_POSTGRES_DATABASE:-zitadel}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: postgres
-      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
-      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${ZITADEL_DB_PASSWORD:-zitadel}
-      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+      # --- Database ---
+      - ZITADEL_DATABASE_POSTGRES_HOST=db
+      - ZITADEL_DATABASE_POSTGRES_PORT=5432
+      - ZITADEL_DATABASE_POSTGRES_DATABASE=zitadel
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME=postgres
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD_FILE=/run/secrets/zitadel_db_admin_password
+      - ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE=disable
+      - ZITADEL_DATABASE_POSTGRES_USER_USERNAME=zitadel
+      - ZITADEL_DATABASE_POSTGRES_USER_PASSWORD_FILE=/run/secrets/zitadel_db_password
+      - ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE=disable
 
-      ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH: /current-dir/login-client.pat
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME: login-client
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME: Automatically Initialized IAM_LOGIN_CLIENT
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE: '2029-01-01T00:00:00Z'
+      # --- Login V2 Configuration ---
+      # We point these to the PUBLIC URL handled by Traefik
+      - ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED=true
+      - ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI=https://${ZITADEL_HOSTNAME}/ui/v2/login
+      - ZITADEL_OIDC_DEFAULTLOGINURLV2=https://${ZITADEL_HOSTNAME}/ui/v2/login/login?authRequest=
+      - ZITADEL_OIDC_DEFAULTLOGOUTURLV2=https://${ZITADEL_HOSTNAME}/ui/v2/login/logout?post_logout_redirect=
+      - ZITADEL_SAML_DEFAULTLOGINURLV2=https://${ZITADEL_HOSTNAME}/ui/v2/login/login?samlRequest=
 
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "true"
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: ${ZITADEL_SCHEME:-https}://${ZITADEL_HOSTNAME:-auth.example.com}:${ZITADEL_EXTERNALPORT:-443}/ui/v2/login
-      ZITADEL_OIDC_DEFAULTLOGINURLV2: ${ZITADEL_SCHEME:-https}://${ZITADEL_HOSTNAME:-auth.example.com}:${ZITADEL_EXTERNALPORT:-443}/ui/v2/login/login?authRequest=
-      ZITADEL_OIDC_DEFAULTLOGOUTURLV2: ${ZITADEL_SCHEME:-https}://${ZITADEL_HOSTNAME:-auth.example.com}:${ZITADEL_EXTERNALPORT:-443}/ui/v2/login/logout?post_logout_redirect=
-      ZITADEL_SAML_DEFAULTLOGINURLV2: ${ZITADEL_SCHEME:-https}://${ZITADEL_HOSTNAME:-auth.example.com}:${ZITADEL_EXTERNALPORT:-443}/ui/v2/login/login?samlRequest=
+      # --- Token Generation for Sidecar ---
+      - ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH=/shared-config/login-client.pat
+      - ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE=2029-01-01T00:00:00Z
 
-      ZITADEL_FIRSTINSTANCE_ORG_NAME: ${ZITADEL_ORG_NAME:-MyOrg}
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_ADMIN_USERNAME:-zitadel-admin}
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${ZITADEL_ADMIN_PASSWORD:-Password1!}
+      # --- Admin User Setup ---
+      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME=${ZITADEL_ADMIN_USER:-admin}
+      - ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD_FILE=/run/secrets/zitadel_admin_password
 
-      ZITADEL_LOG_LEVEL: debug
-      ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: true
-
-    healthcheck:
-      test:
-        - CMD
-        - /app/zitadel
-        - ready
-      interval: 10s
-      timeout: 60s
-      retries: 5
-      start_period: 10s
-    user: "0"
     volumes:
-      - zitadel-init-data:/current-dir
+      # Share the generated config with the login container
+      - zitadel-shared-config:/shared-config
     networks:
-      - zitadel
-      - traefik-net
-    depends_on:
-      db:
-        condition: service_healthy
+      - ${TRAEFIK_NETWORK:-edge-external}
+      - zitadel-backend
+    secrets:
+      - zitadel_masterkey
+      - zitadel_db_password
+      - zitadel_db_admin_password
+      - zitadel_admin_password
+    healthcheck:
+      test: ["CMD", "/app/zitadel", "ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Security: Read Only + Tmpfs
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+    cap_drop:
+      - ALL
 
   login:
+    image: ghcr.io/zitadel/zitadel-login:v4.10.1
+    user: "1000"
     deploy:
       mode: replicated
       replicas: 1
+      restart_policy:
+        condition: on-failure
       labels:
         - "traefik.enable=true"
         - "traefik.swarm.network=${TRAEFIK_NETWORK:-edge-external}"
-        # Router: Login V2
-        - "traefik.http.routers.zitadel-login.rule=Host(`${ZITADEL_HOSTNAME:-auth.example.com}`) && PathPrefix(`/ui/v2/login`)"
+
+        # --- Router: Login V2 Specific Path ---
+        # Routes /ui/v2/login to this container
+        - "traefik.http.routers.zitadel-login.rule=Host(`${ZITADEL_HOSTNAME}`) && PathPrefix(`/ui/v2/login`)"
         - "traefik.http.routers.zitadel-login.entrypoints=websecure"
+        - "traefik.http.routers.zitadel-login.tls=true"
         - "traefik.http.routers.zitadel-login.service=zitadel-login"
-        # Service: Login V2 (HTTP on Port 3000)
+
+        # --- Service: HTTP (NextJS) ---
         - "traefik.http.services.zitadel-login.loadbalancer.server.port=3000"
-        - "traefik.http.services.zitadel-login.loadbalancer.server.scheme=http"
-    restart: unless-stopped
-    image: ghcr.io/zitadel/zitadel-login:latest
+
     environment:
+      # Use DNS name 'zitadel' (Service Discovery), not localhost!
       - ZITADEL_API_URL=http://zitadel:8080
       - NEXT_PUBLIC_BASE_PATH=/ui/v2/login
-      - ZITADEL_SERVICE_USER_TOKEN_FILE=/current-dir/login-client.pat
-      - CUSTOM_REQUEST_HEADERS=Host:${ZITADEL_HOSTNAME:-auth.example.com}
-    networks:
-      - zitadel
-      - traefik-net
-    user: "0"
+      # Read the token generated by the main container
+      - ZITADEL_SERVICE_USER_TOKEN_FILE=/shared-config/login-client.pat
+      - CUSTOM_REQUEST_HEADERS=Host:${ZITADEL_HOSTNAME}
     volumes:
-      - zitadel-init-data:/current-dir:ro
-    depends_on:
-      zitadel:
-        condition: service_healthy
-        restart: false
+      - zitadel-shared-config:/shared-config:ro
+    networks:
+      - ${TRAEFIK_NETWORK:-edge-external}
+      - zitadel-backend
+    read_only: true
+    tmpfs:
+      - /tmp:rw,size=50m
 
   db:
-    restart: unless-stopped
     image: postgres:17
-    environment:
-      PGUSER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres}
-      POSTGRES_DB: ${ZITADEL_DATABASE_POSTGRES_DATABASE:-zitadel}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U postgres"]
-      interval: 10s
-      timeout: 30s
-      retries: 5
-      start_period: 20s
-    deploy:
-      mode: replicated
-      replicas: 1
-      labels:
-        - "traefik.enable=false"
-    networks:
-      - zitadel
-    ports:
-      - 5432:5432
     volumes:
-      - 'data:/var/lib/postgresql/data:rw'
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=zitadel
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD_FILE=/run/secrets/zitadel_db_admin_password
+    networks:
+      - zitadel-backend
+    deploy:
+      replicas: 1
+    secrets:
+      - zitadel_db_admin_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d zitadel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
-  zitadel:
-    driver: overlay
-    attachable: true
-  traefik-net:
+  edge-external:
     external: true
     name: ${TRAEFIK_NETWORK:-edge-external}
+  zitadel-backend:
+    driver: overlay
+    attachable: false
 
 volumes:
-  data:
-  zitadel-init-data:
+  # This volume acts as the bridge to pass the PAT token
+  # from 'zitadel' to 'login' since we can't use network_mode: service
+  zitadel-shared-config:
+  db-data:
+
+secrets:
+  zitadel_masterkey:
+    external: true
+  zitadel_db_password:
+    external: true
+  zitadel_db_admin_password:
+    external: true
+  zitadel_admin_password:
+    external: true
