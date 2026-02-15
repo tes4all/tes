@@ -120,6 +120,7 @@ services:
 
   db:
     image: postgres:17
+
     volumes:
       - db-data:/var/lib/postgresql/data
     environment:

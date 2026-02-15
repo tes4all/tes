@@ -67,7 +67,8 @@ services:
         max-file: "3"
 
   db:
-    image: postgres:15-alpine
+    image: postgres:18.2-alpine
+
     volumes:
       - db-data:/var/lib/postgresql/data
     environment:
