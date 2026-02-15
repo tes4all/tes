@@ -93,7 +93,7 @@ def update_image_references(project_root, image_name, new_version):
         f"tes4all/{image_name}",
         f"tes4all/edge-router-{image_name}"
     ]
-    
+
     updated_files = set()
     found_any = False
 
@@ -108,13 +108,13 @@ def update_image_references(project_root, image_name, new_version):
             for file in files:
                 if file in ("compose.yaml", "compose.yml"):
                     filepath = os.path.join(root, file)
-                    
+
                     with open(filepath, 'r') as f:
                         content = f.read()
-                    
+
                     if full_image not in content:
                         continue
-                    
+
                     found_any = True
                     match = pattern.search(content)
                     if match:
@@ -127,7 +127,7 @@ def update_image_references(project_root, image_name, new_version):
                             updated_files.add(filepath)
                         else:
                             print(f"Reference to {full_image} in {filepath} is already up to date ({new_version}).")
-    
+
     if not found_any:
         # Only warn if we checked all variants and found nothing
         print(f"Note: No references found for {image_name} (checked {', '.join(possible_names)}) in stacks.")
@@ -137,14 +137,14 @@ def update_requirements(path, bump_version=True):
     req_in = os.path.join(path, "requirements.in")
     req_txt = os.path.join(path, "requirements.txt")
     req_new = os.path.join(path, "requirements.txt.new")
-    
+
     if not os.path.exists(req_in):
         print(f"Error: {req_in} not found.")
         return
 
     # Compile new requirements
     run_command(f"uv pip compile requirements.in -o requirements.txt.new --upgrade", cwd=path)
-    
+
     changed = False
     if not os.path.exists(req_txt):
         changed = True
@@ -152,20 +152,20 @@ def update_requirements(path, bump_version=True):
         with open(req_txt, 'rb') as f1, open(req_new, 'rb') as f2:
             if f1.read() != f2.read():
                 changed = True
-    
+
     if changed:
         print("Dependencies updated.")
         os.replace(req_new, req_txt)
-        
+
         if bump_version:
             # Update VERSION file
             version_file = os.path.join(path, "VERSION")
             if os.path.exists(version_file):
                 with open(version_file, 'r') as f:
                     current_version = f.read().strip()
-                
+
                 new_version = bump_version_string(current_version)
-                
+
                 with open(version_file, 'w') as f:
                     f.write(new_version)
                 print(f"Bumped version to {new_version}")
@@ -180,12 +180,12 @@ def update_requirements(path, bump_version=True):
 
             else:
                 print("VERSION file not found, skipping version bump.")
-        
+
         # Sync venv
         print("Syncing virtual environment...")
         run_command("uv venv --allow-existing", cwd=path)
         run_command("uv pip install -r requirements.txt", cwd=path)
-        
+
     else:
         if os.path.exists(req_new):
             os.remove(req_new)
@@ -195,9 +195,9 @@ def main():
     parser = argparse.ArgumentParser(description="Update dependencies and bump versions.")
     parser.add_argument("path", help="Path to the project directory")
     parser.add_argument("--type", choices=["cli", "image", "venv"], required=True, help="Type of project to update")
-    
+
     args = parser.parse_args()
-    
+
     abs_path = os.path.abspath(args.path)
     if not os.path.isdir(abs_path):
         print(f"Error: Directory {abs_path} does not exist.")
