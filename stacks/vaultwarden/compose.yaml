@@ -1,6 +1,6 @@
 services:
   vaultwarden:
-    image: tes4all/vaultwarden:${VAULTWARDEN_VERSION:-1.35.2-alpine}
+    image: tes4all/vaultwarden:${VAULTWARDEN_VERSION:-1.35.3-alpine}
     networks:
       - db-internal
       - proxy-public
