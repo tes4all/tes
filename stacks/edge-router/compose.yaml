@@ -225,7 +225,8 @@ services:
   # Edge API - Control Plane
   # ===========================================
   edge-router-api:
-    image: tes4all/edge-router-api:${EDGE_API_VERSION:-1.0.1}
+    image: tes4all/edge-router-api:${EDGE_API_VERSION:-1.0.4}
+
     networks:
       - edge-internal
     environment:
@@ -247,7 +248,8 @@ services:
   # Cert Manager - Lego Controller
   # ===========================================
   cert-manager:
-    image: tes4all/cert-manager:${CERT_MANAGER_VERSION:-1.0.3}
+    image: tes4all/cert-manager:${CERT_MANAGER_VERSION:-1.0.5}
+
     networks:
       - edge-internal
       - edge-external
@@ -286,7 +288,8 @@ services:
   # Cert Syncer - Generator for Traefik Config
   # ===========================================
   cert-syncer:
-    image: tes4all/cert-syncer:${CERT_SYNCER_VERSION:-1.0.0}
+    image: tes4all/cert-syncer:${CERT_SYNCER_VERSION:-1.0.2}
+
     build:
       context: ../../images/cert-syncer
     networks:
