@@ -1,0 +1,242 @@
+services:
+  valkey-1:
+    image: ${VALKEY_IMAGE:-valkey-ha:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["valkey-server", "--protected-mode", "no"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - valkey-1-data:/data
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  valkey-exporter-1:
+    image: oliver006/redis_exporter:v1.67.0-alpine
+    command: ["--redis.addr", "valkey-1:6379"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+    depends_on:
+      valkey-1:
+        condition: service_healthy
+
+  valkey-2:
+    image: ${VALKEY_IMAGE:-valkey-ha:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["valkey-server", "--protected-mode", "no", "--replicaof", "valkey-1", "6379"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - valkey-2-data:/data
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      valkey-1:
+        condition: service_healthy
+
+  valkey-exporter-2:
+    image: oliver006/redis_exporter:v1.67.0-alpine
+    command: ["--redis.addr", "valkey-2:6379"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+    depends_on:
+      valkey-2:
+        condition: service_healthy
+
+  valkey-3:
+    image: ${VALKEY_IMAGE:-valkey-ha:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["valkey-server", "--protected-mode", "no", "--replicaof", "valkey-1", "6379"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - valkey-3-data:/data
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == worker
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      valkey-1:
+        condition: service_healthy
+
+  valkey-exporter-3:
+    image: oliver006/redis_exporter:v1.67.0-alpine
+    command: ["--redis.addr", "valkey-3:6379"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+    depends_on:
+      valkey-3:
+        condition: service_healthy
+
+  sentinel-1:
+    image: ${VALKEY_IMAGE:-valkey-ha:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["valkey-sentinel"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - sentinel-1-data:/data
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -p 26379 ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      valkey-1:
+        condition: service_healthy
+
+  sentinel-2:
+    image: ${VALKEY_IMAGE:-valkey-ha:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["valkey-sentinel"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - sentinel-2-data:/data
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -p 26379 ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      valkey-1:
+        condition: service_healthy
+
+  sentinel-3:
+    image: ${VALKEY_IMAGE:-valkey-ha:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["valkey-sentinel"]
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - sentinel-3-data:/data
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -p 26379 ping | grep PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      valkey-1:
+        condition: service_healthy
+
+  haproxy:
+    image: haproxy:alpine
+    user: haproxy
+    volumes:
+      - ./config/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "6379:6379"
+      - "26379:26379"
+    networks:
+      - valkey-net
+    deploy:
+      mode: replicated
+      replicas: 1
+    depends_on:
+      sentinel-1:
+        condition: service_healthy
+
+volumes:
+  valkey-1-data:
+  valkey-2-data:
+  valkey-3-data:
+  sentinel-1-data:
+  sentinel-2-data:
+  sentinel-3-data:
+
+networks:
+  valkey-net:
