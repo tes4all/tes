@@ -1,0 +1,57 @@
+name: penpot
+
+services:
+  penpot-frontend:
+    image: penpotapp/frontend:latest
+    restart: always
+    ports:
+      - "9001:80"
+    volumes:
+      - penpot_assets:/opt/data/assets
+    env_file:
+      - config/config.env
+    depends_on:
+      - penpot-backend
+    networks:
+      - penpot-net
+
+  penpot-backend:
+    image: penpotapp/backend:latest
+    restart: always
+    # volume is optional if using S3
+    volumes:
+      - penpot_assets:/opt/data/assets
+    env_file:
+      - config/config.env
+    depends_on:
+      - penpot-exporter
+    networks:
+      - penpot-net
+      - database-net
+      - redis-net
+      - storage-net
+
+  penpot-exporter:
+    image: penpotapp/exporter:latest
+    restart: always
+    env_file:
+      - config/config.env
+    networks:
+      - penpot-net
+      - storage-net
+      - redis-net
+
+volumes:
+  penpot_assets:
+
+networks:
+  penpot-net:
+  database-net:
+    external: true
+    name: postgres_network
+  redis-net:
+    external: true
+    name: valkey_network
+  storage-net:
+    external: true
+    name: rustfs_network
