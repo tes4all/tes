@@ -1,0 +1,115 @@
+name: rustfs
+
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: rustfs
+    hostname: rustfs
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    cap_drop:
+      - ALL
+    user: "10001:10001"
+    environment:
+      # Administrative credentials
+      # WARNING: Use environment variables or .env file for sensitive data
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+
+      # Network binding
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+
+      # Storage Volumes (Simulates Erasure Coding on single node)
+      RUSTFS_VOLUMES: /data/rustfs{0..3}
+
+      # Console & CORS
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS: '*'
+      RUSTFS_CORS_ALLOWED_ORIGINS: '*'
+    ports:
+      - mode: ingress
+        target: 9000
+        published: "9000"
+        protocol: tcp
+      - mode: ingress
+        target: 9001
+        published: "9001"
+        protocol: tcp
+    volumes:
+      - type: volume
+        source: rustfs_data_0
+        target: /data/rustfs0
+      - type: volume
+        source: rustfs_data_1
+        target: /data/rustfs1
+      - type: volume
+        source: rustfs_data_2
+        target: /data/rustfs2
+      - type: volume
+        source: rustfs_data_3
+        target: /data/rustfs3
+      - type: tmpfs
+        target: /tmp
+      - type: tmpfs
+        target: /run
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -f http://127.0.0.1:9000/health && curl -f http://127.0.0.1:9001/rustfs/console/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 1G
+        reservations:
+          cpus: 0.1
+          memory: 256M
+    depends_on:
+      rustfs-init:
+        condition: service_completed_successfully
+
+  rustfs-init:
+    image: alpine:latest
+    container_name: rustfs-init
+    command:
+      - sh
+      - -c
+      - |
+        echo "Fixing permissions for rustfs volumes..."
+        for i in 0 1 2 3; do
+          mkdir -p /data/rustfs$$i
+          chown -R 10001:10001 /data/rustfs$$i
+        done
+        ls -ld /data/rustfs*
+    volumes:
+      - type: volume
+        source: rustfs_data_0
+        target: /data/rustfs0
+      - type: volume
+        source: rustfs_data_1
+        target: /data/rustfs1
+      - type: volume
+        source: rustfs_data_2
+        target: /data/rustfs2
+      - type: volume
+        source: rustfs_data_3
+        target: /data/rustfs3
+
+volumes:
+  rustfs_data_0:
+    name: rustfs_rustfs_data_0
+  rustfs_data_1:
+    name: rustfs_rustfs_data_1
+  rustfs_data_2:
+    name: rustfs_rustfs_data_2
+  rustfs_data_3:
+    name: rustfs_rustfs_data_3
+
+networks:
+  default:
+    name: rustfs_network
