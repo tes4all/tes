@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM vaultwarden/server:1.35.3-alpine
+FROM vaultwarden/server:1.35.4-alpine
 
 # Security: Create non-root user
 # The official image runs as root by default. We create a user to run the service.
