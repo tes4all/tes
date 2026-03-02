@@ -2,7 +2,7 @@
 FROM goacme/lego:v4.31.0 AS lego-source
 
 # Stage 1: Build Python Venv
-FROM python:3.14-slim-trixie AS builder
+FROM python:3.14.3-slim-trixie AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /bin/
 
 RUN apt-get update && apt-get -y upgrade && apt-get install -y python3-dev gcc build-essential
@@ -16,7 +16,7 @@ RUN uv venv .venv && \
     uv pip install --no-cache -r requirements.txt
 
 # Stage 2: Final Image
-FROM python:3.14-slim-trixie
+FROM python:3.14.3-slim-trixie
 
 RUN apt-get update && apt-get -y upgrade && \
     apt-get install -y ca-certificates git gosu && \

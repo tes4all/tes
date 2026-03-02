@@ -1,4 +1,4 @@
-FROM python:3.14-slim-trixie AS builder
+FROM python:3.14.3-slim-trixie AS builder
 COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /bin/
 
 RUN apt-get update && apt-get -y upgrade && apt-get install -y python3-dev gcc build-essential
@@ -12,7 +12,7 @@ ENV PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1
 RUN uv venv .venv && \
     uv pip install --no-cache -r requirements.txt
 
-FROM python:3.14-slim-trixie
+FROM python:3.14.3-slim-trixie
 
 RUN apt-get update && apt-get -y upgrade && apt-get install -y apt-transport-https curl && rm -rf /var/lib/apt/lists/*
 

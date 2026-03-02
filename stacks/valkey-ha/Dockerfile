@@ -1,5 +1,5 @@
 # Use a specific version for stability
-FROM valkey/valkey:8.0.2-alpine
+FROM valkey/valkey:9.0.3-alpine
 
 # Use root to setup configuration files and permissions
 USER root

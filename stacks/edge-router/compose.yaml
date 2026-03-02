@@ -35,7 +35,8 @@ services:
   # Valkey - State Store (Redis Protocol)
   # ===========================================
   valkey:
-    image: valkey/valkey:9.0.2-alpine
+    image: valkey/valkey:9.0.3-alpine
+
 
     command: valkey-server --appendonly yes --requirepass ${VALKEY_PASSWORD:-insecure_default}
     hostname: valkey
@@ -64,7 +65,8 @@ services:
   # HAProxy - L4 TCP Load Balancer (Global Mode)
   # ===========================================
   haproxy:
-    image: tes4all/haproxy:${HAPROXY_VERSION:-3.3.3-alpine}
+    image: tes4all/haproxy:${HAPROXY_VERSION:-3.3.4-alpine}
+
     hostname: haproxy-{{.Task.Slot}}
     networks:
       - edge-internal
@@ -225,7 +227,7 @@ services:
   # Edge API - Control Plane
   # ===========================================
   edge-router-api:
-    image: tes4all/edge-router-api:${EDGE_API_VERSION:-1.0.4}
+    image: tes4all/edge-router-api:${EDGE_API_VERSION:-1.0.5}
 
     networks:
       - edge-internal
@@ -248,7 +250,7 @@ services:
   # Cert Manager - Lego Controller
   # ===========================================
   cert-manager:
-    image: tes4all/cert-manager:${CERT_MANAGER_VERSION:-1.0.5}
+    image: tes4all/cert-manager:${CERT_MANAGER_VERSION:-1.0.6}
 
     networks:
       - edge-internal
